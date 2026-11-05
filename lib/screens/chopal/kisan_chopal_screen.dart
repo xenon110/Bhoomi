@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../l10n/app_strings.dart';
+import '../../services/storage_service.dart';
 import '../../services/turso/turso_service.dart';
 import '../../theme/app_theme.dart';
 
@@ -157,7 +158,7 @@ class _KisanChopalScreenState extends State<KisanChopalScreen> with SingleTicker
               controller: titleCtrl,
               maxLines: 3,
               decoration: InputDecoration(
-                hintText: isHindi ? 'ग्राम चान्की व पलामू के किसानों के लिए सूचना टाइप करें...' : 'Type notice for farmers of Chanki & Palamu...',
+                hintText: isHindi ? 'अपने क्षेत्र के किसानों के लिए सूचना टाइप करें...' : 'Type notice for local farmers...',
                 border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
               ),
             ),
@@ -169,11 +170,14 @@ class _KisanChopalScreenState extends State<KisanChopalScreen> with SingleTicker
             style: ElevatedButton.styleFrom(backgroundColor: AppColors.primaryGreen, foregroundColor: Colors.white),
             onPressed: () {
               if (titleCtrl.text.trim().isNotEmpty) {
+                final farmerName = StorageService().getProfile().name;
                 final newNotice = {
                   'id': DateTime.now().millisecondsSinceEpoch.toString(),
                   'title': titleCtrl.text.trim(),
                   'hi': titleCtrl.text.trim(),
-                  'author': 'Kisan User (You)',
+                  'author': farmerName.isNotEmpty
+                      ? '$farmerName (You)'
+                      : (isHindi ? 'आप (किसान साथी)' : 'You (Farmer)'),
                   'date': 'Just now',
                   'badge': 'Farmer Post',
                   'isUrgent': false,

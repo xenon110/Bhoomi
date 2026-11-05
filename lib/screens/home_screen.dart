@@ -563,7 +563,9 @@ class _HomeScreenState extends State<HomeScreen> {
                               ),
                               const SizedBox(height: 2),
                               Text(
-                                isHindi ? 'नमस्ते, ${profile.name} 👋' : 'Namaste, ${profile.name} 👋',
+                                profile.name.isNotEmpty
+                                    ? (isHindi ? 'नमस्ते, ${profile.name} 👋' : 'Namaste, ${profile.name} 👋')
+                                    : (isHindi ? 'नमस्ते, किसान साथी 👋' : 'Namaste, Kisan Saathi 👋'),
                                 style: const TextStyle(
                                   fontSize: 24,
                                   fontWeight: FontWeight.w600,
@@ -724,7 +726,9 @@ class _HomeScreenState extends State<HomeScreen> {
                                           ),
                                           const SizedBox(width: 5),
                                           Text(
-                                            profile.district,
+                                            profile.district.isNotEmpty
+                                                ? profile.district
+                                                : (isHindi ? 'स्थानीय प्रक्षेत्र' : 'Local Farm'),
                                             style: const TextStyle(
                                               fontSize: 12.5,
                                               fontWeight: FontWeight.w400,
@@ -1177,41 +1181,101 @@ class _HomeScreenState extends State<HomeScreen> {
           const SizedBox(height: 10),
 
           // Horizontal Carousel of Real Crops
-          SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            physics: const BouncingScrollPhysics(),
-            child: Row(
-              children: [
-                _buildCropCard(
-                  imagePath: 'assets/images/mustard_crop.jpg',
-                  cropName: isHindi ? 'पीली सरसों' : 'Yellow Mustard',
-                  variety: isHindi ? 'किस्म: वरुणा (T-59) · बुवाई 35 दिन' : 'Varuna Variety · Sown 35 days ago',
-                  stage: isHindi ? 'फूल अवस्था ✓' : 'Flowering Stage ✓',
-                  plotInfo: isHindi ? 'प्लॉट A · 2.5 एकड़ · मिट्टी नमी 68%' : 'Plot A · 2.5 Acres · Moisture 68%',
-                  badgeBg: const Color(0xFFFCEFD0),
-                  badgeTextColor: const Color(0xFF8A5600),
+          () {
+            final farm = _storage.getPrimaryFarm();
+            final crops = farm.crops;
+            if (crops.isEmpty) {
+              return InkWell(
+                onTap: () => widget.onNavigateTab?.call(1),
+                borderRadius: BorderRadius.circular(20),
+                child: Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: const Color(0xFFE6E0D2)),
+                    boxShadow: const [BoxShadow(color: Color(0xFFE9E2D1), offset: Offset(0, 3))],
+                  ),
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 48,
+                        height: 48,
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFE2EFDF),
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        alignment: Alignment.center,
+                        child: const Icon(Icons.spa_rounded, color: Color(0xFF1E4D2B), size: 24),
+                      ),
+                      const SizedBox(width: 14),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              isHindi ? 'अपनी फसलें जोड़ें' : 'Add Your Farm Crops',
+                              style: const TextStyle(
+                                fontFamily: 'Mukta',
+                                fontSize: 16,
+                                fontWeight: FontWeight.w600,
+                                color: Color(0xFF1B2A21),
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              isHindi
+                                  ? 'खेत में उगाई जा रही फसलों का विवरण दर्ज करें और मौसम सलाह पाएं।'
+                                  : 'Track your crops, sowing dates, and tailored advisory.',
+                              style: const TextStyle(
+                                fontFamily: 'Mukta',
+                                fontSize: 12.5,
+                                fontWeight: FontWeight.w400,
+                                color: Color(0xFF55655A),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const Icon(Icons.arrow_forward_ios_rounded, size: 16, color: Color(0xFF1E4D2B)),
+                    ],
+                  ),
                 ),
-                _buildCropCard(
-                  imagePath: 'assets/images/wheat_crop.jpg',
-                  cropName: isHindi ? 'शरबती गेहूं' : 'Sharbati Wheat',
-                  variety: isHindi ? 'किस्म: HD-2967 · बुवाई 22 दिन' : 'HD-2967 · Sown 22 days ago',
-                  stage: isHindi ? 'कल्ले फूट रहे' : 'Tillering Stage',
-                  plotInfo: isHindi ? 'नॉर्थ प्लॉट B · 3.0 एकड़ · उत्तम विकास' : 'North Plot B · 3.0 Acres · Good Growth',
-                  badgeBg: const Color(0xFFE2EFDF),
-                  badgeTextColor: const Color(0xFF1E4D2B),
-                ),
-                _buildCropCard(
-                  imagePath: 'assets/images/farmer_field.jpg',
-                  cropName: isHindi ? 'खेत गश्त व छिड़काव' : 'Field Inspection & Care',
-                  variety: isHindi ? 'दैनिक खेत निगरानी कार्य' : 'Daily Field Inspection Routine',
-                  stage: isHindi ? 'अनुकूल खिड़की' : 'Safe Spray Window',
-                  plotInfo: isHindi ? 'पलामू प्रक्षेत्र · 9:30 AM - 3 PM उत्तम' : 'Palamu Farmland · Safe till 3 PM',
-                  badgeBg: const Color(0xFFDDEBF3),
-                  badgeTextColor: const Color(0xFF18566F),
-                ),
-              ],
-            ),
-          ),
+              );
+            }
+
+            return SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              physics: const BouncingScrollPhysics(),
+              child: Row(
+                children: crops.map((crop) {
+                  final cNameLower = crop.name.toLowerCase();
+                  String img = 'assets/images/farmer_field.jpg';
+                  if (cNameLower.contains('mustard') || cNameLower.contains('sarson')) {
+                    img = 'assets/images/mustard_crop.jpg';
+                  } else if (cNameLower.contains('wheat') || cNameLower.contains('gehu')) {
+                    img = 'assets/images/wheat_crop.jpg';
+                  }
+                  final plotText = farm.totalArea > 0
+                      ? '${farm.totalArea} Acres · ${farm.village.isNotEmpty ? farm.village : (isHindi ? "खेत" : "Farmland")}'
+                      : (farm.village.isNotEmpty ? farm.village : (isHindi ? "सक्रिय खेत" : "Active Plot"));
+
+                  return _buildCropCard(
+                    imagePath: img,
+                    cropName: crop.name,
+                    variety: crop.variety.isNotEmpty
+                        ? '${isHindi ? "किस्म:" : "Variety:"} ${crop.variety}'
+                        : (crop.notes.isNotEmpty ? crop.notes : (isHindi ? 'सक्रिय खेती' : 'Active Growth')),
+                    stage: crop.growthStage.isNotEmpty ? crop.growthStage : (isHindi ? 'अनुकूल स्थिति' : 'Healthy'),
+                    plotInfo: plotText,
+                    badgeBg: const Color(0xFFE2EFDF),
+                    badgeTextColor: const Color(0xFF1E4D2B),
+                  );
+                }).toList(),
+              ),
+            );
+          }(),
 
           const SizedBox(height: 20),
 

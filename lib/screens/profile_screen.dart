@@ -551,13 +551,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 const SizedBox(height: 18),
 
                 // Details List
-                _buildDetailRow('Full Name', _profile.name, Icons.person_outline_rounded),
-                _buildDetailRow('Mobile Number', _profile.phone, Icons.phone_outlined, badge: 'Active · OTP Verified'),
-                _buildDetailRow('Kisan ID (KCC)', _profile.kisanId, Icons.badge_outlined),
-                _buildDetailRow('Village & Block', '${_profile.village}, Palamu Block', Icons.holiday_village_outlined),
-                _buildDetailRow('District & State', '${_profile.district}, ${_profile.state}', Icons.location_on_outlined),
-                _buildDetailRow('Landholding', '${_profile.totalArea} Acres · Small Farmer', Icons.aspect_ratio_rounded),
-                _buildDetailRow('Soil Type', _profile.soilType, Icons.layers_outlined),
+                _buildDetailRow('Full Name', _profile.name.isNotEmpty ? _profile.name : 'Not set', Icons.person_outline_rounded),
+                _buildDetailRow('Mobile Number', _profile.phone.isNotEmpty ? _profile.phone : 'Not set', Icons.phone_outlined, badge: _profile.phone.isNotEmpty ? 'Active · OTP Verified' : null),
+                _buildDetailRow('Kisan ID (KCC)', _profile.kisanId.isNotEmpty ? _profile.kisanId : 'Not assigned', Icons.badge_outlined),
+                _buildDetailRow('Village', _profile.village.isNotEmpty ? _profile.village : 'Not set', Icons.holiday_village_outlined),
+                _buildDetailRow('District & State', [_profile.district, _profile.state].where((s) => s.isNotEmpty).join(', ').isNotEmpty ? [_profile.district, _profile.state].where((s) => s.isNotEmpty).join(', ') : 'Not set', Icons.location_on_outlined),
+                _buildDetailRow('Landholding', _profile.totalArea > 0 ? '${_profile.totalArea} Acres' : 'Not registered', Icons.aspect_ratio_rounded),
+                _buildDetailRow('Soil Type', _profile.soilType.isNotEmpty ? _profile.soilType : 'Loamy / Sandy Loam', Icons.layers_outlined),
                 _buildDetailRow('Aadhaar DBT', 'Linked & Verified', Icons.account_balance_outlined, badge: 'Active ✓'),
                 _buildDetailRow('PM-KISAN Scheme', 'Active (18th Installment)', Icons.volunteer_activism_outlined),
 
@@ -797,8 +797,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 const SizedBox(height: 10),
 
                 _buildSupportTile(
-                  title: 'WhatsApp Crop Doctor Helpline',
-                  phone: '+91 94311 00000',
+                  title: 'Kisan Call Center / Expert Helpline',
+                  phone: '1800-180-1551',
                   timing: 'Send photo of affected crop for quick advice',
                   icon: Icons.chat_rounded,
                   iconBg: const Color(0xFFDDEBF3),
@@ -1521,7 +1521,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              _profile.name.isNotEmpty ? _profile.name : 'Kisan User',
+                              _profile.name.isNotEmpty
+                                  ? _profile.name
+                                  : (isHindi ? 'किसान साथी' : 'Kisan Member'),
                               style: const TextStyle(
                                 fontFamily: 'Mukta',
                                 fontSize: 22,

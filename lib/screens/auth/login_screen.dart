@@ -11,7 +11,7 @@ class LoginScreen extends StatefulWidget {
 }
 
 class _LoginScreenState extends State<LoginScreen> {
-  final TextEditingController _phoneController = TextEditingController(text: '9876543210');
+  final TextEditingController _phoneController = TextEditingController();
   bool _isListening = false;
 
   @override
@@ -70,11 +70,9 @@ class _LoginScreenState extends State<LoginScreen> {
       ),
     );
 
-    // Simulate speech detection
     Future.delayed(const Duration(seconds: 2), () {
       if (mounted) {
         setState(() {
-          _phoneController.text = '9876543210';
           _isListening = false;
         });
       }

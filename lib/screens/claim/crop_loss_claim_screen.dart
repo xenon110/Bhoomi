@@ -366,7 +366,10 @@ class _CropLossClaimScreenState extends State<CropLossClaimScreen> {
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Text(isHindi ? 'जियोटैग स्थान:' : 'Auto GPS Tag:', style: const TextStyle(fontFamily: 'Mukta', fontSize: 11, fontWeight: FontWeight.w500, color: Color(0xFF18566F))),
-                                const Text('Lat: 24.0322° N, Long: 84.0722° E | Chanki Field P-1', style: TextStyle(fontFamily: 'Mukta', fontSize: 12, color: AppColors.textDark)),
+                                Text(
+                                  'Lat: 24.0322° N, Long: 84.0722° E | ${StorageService().getProfile().village.isNotEmpty ? "${StorageService().getProfile().village} Farmland" : "Farm Field Plot 1"}',
+                                  style: const TextStyle(fontFamily: 'Mukta', fontSize: 12, color: AppColors.textDark),
+                                ),
                               ],
                             ),
                           ),

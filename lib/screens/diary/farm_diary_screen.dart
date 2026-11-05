@@ -334,52 +334,55 @@ class _FarmDiaryScreenState extends State<FarmDiaryScreen> {
                     ),
                   ],
                 ),
-                child: Column(
-                  children: [
-                    // Item 1: Checked leaves (Ashwagandha · 1 acre, Today)
-                    _buildDiaryRow(
-                      icon: Icons.eco_outlined,
-                      iconBg: const Color(0xFFE2EFDF),
-                      iconColor: AppColors.primaryGreen,
-                      title: isHindi ? 'पत्तियों की जांच की' : 'Checked leaves',
-                      subtitle: isHindi ? 'अश्वगंधा · 1 एकड़' : 'Ashwagandha · 1 acre',
-                      time: isHindi ? 'आज' : 'Today',
-                      showDivider: true,
-                    ),
-                    // Item 2: Watered (Tulsi · 1 acre, Yesterday)
-                    _buildDiaryRow(
-                      icon: Icons.water_drop_outlined,
-                      iconBg: const Color(0xFFDDEBF3),
-                      iconColor: const Color(0xFF18566F),
-                      title: isHindi ? 'सिंचाई की' : 'Watered',
-                      subtitle: isHindi ? 'तुलसी · 1 एकड़' : 'Tulsi · 1 acre',
-                      time: isHindi ? 'कल' : 'Yesterday',
-                      showDivider: true,
-                    ),
-                    // Item 3: Weeded (Ashwagandha · 1 acre, 2 days ago)
-                    _buildDiaryRow(
-                      icon: Icons.grass_rounded,
-                      iconBg: const Color(0xFFE2EFDF),
-                      iconColor: AppColors.primaryGreen,
-                      title: isHindi ? 'निराई-गुड़ाई की' : 'Weeded',
-                      subtitle: isHindi ? 'अश्वगंधा · 1 एकड़' : 'Ashwagandha · 1 acre',
-                      time: isHindi ? '2 दिन पहले' : '2 days ago',
-                      showDivider: _entries.isNotEmpty,
-                    ),
-                    // Dynamic additional user entries from storage
-                    ..._entries.take(5).map((e) {
-                      return _buildDiaryRow(
-                        icon: Icons.edit_note_rounded,
-                        iconBg: AppColors.accentGoldLight,
-                        iconColor: const Color(0xFF7A4D00),
-                        title: e.title,
-                        subtitle: e.category,
-                        time: e.date,
-                        showDivider: e != _entries.last,
-                      );
-                    }).toList(),
-                  ],
-                ),
+                child: _entries.isEmpty
+                    ? Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 16),
+                        child: Center(
+                          child: Column(
+                            children: [
+                              const Icon(Icons.menu_book_rounded, size: 36, color: Color(0xFF8A9A86)),
+                              const SizedBox(height: 8),
+                              Text(
+                                isHindi ? 'कोई डायरी प्रविष्टि नहीं' : 'No farm activities logged yet',
+                                style: const TextStyle(
+                                  fontFamily: 'Mukta',
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w600,
+                                  color: Color(0xFF1B2A21),
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                isHindi
+                                    ? 'खेत में किए गए कार्यों को नीचे त्वरित लॉग या नई प्रविष्टि द्वारा दर्ज करें।'
+                                    : 'Use Quick Log above or tap "+ New diary entry" to record field tasks.',
+                                textAlign: TextAlign.center,
+                                style: const TextStyle(
+                                  fontFamily: 'Mukta',
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w400,
+                                  color: Color(0xFF55655A),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      )
+                    : Column(
+                        children: [
+                          for (int i = 0; i < _entries.length; i++) ...[
+                            _buildDiaryRow(
+                              icon: Icons.edit_note_rounded,
+                              iconBg: AppColors.accentGoldLight,
+                              iconColor: const Color(0xFF7A4D00),
+                              title: _entries[i].title,
+                              subtitle: _entries[i].category,
+                              time: _entries[i].date,
+                              showDivider: i < _entries.length - 1,
+                            ),
+                          ],
+                        ],
+                      ),
               ),
 
               const SizedBox(height: 28),

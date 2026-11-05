@@ -295,7 +295,7 @@ class _FarmListScreenState extends State<FarmListScreen> {
                                                       ),
                                                     ),
                                                     Text(
-                                                      '${crop.area} ac · ${crop.growthStage ?? "Active"}',
+                                                      '${crop.variety != null && crop.variety!.isNotEmpty ? crop.variety : "Crop"} · ${crop.growthStage ?? "Active"}',
                                                       style: const TextStyle(
                                                         fontFamily: 'Mukta',
                                                         fontSize: 10.5,

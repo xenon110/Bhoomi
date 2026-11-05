@@ -60,7 +60,7 @@ class BhoomiApp extends StatelessWidget {
         '/intro_advice': (_) => const IntroAdviceScreen(),
         '/language': (_) => const LanguageSelectionScreen(),
         '/login': (_) => const LoginScreen(),
-        '/otp': (_) => const OtpVerificationScreen(phoneNumber: '9876543210'),
+        '/otp': (_) => const OtpVerificationScreen(phoneNumber: ''),
         '/signup': (_) => const SignupProfileScreen(),
         '/main': (_) => const MainNavigation(),
       },

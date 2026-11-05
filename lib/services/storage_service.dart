@@ -215,159 +215,33 @@ class StorageService extends ChangeNotifier {
 
   void _loadDefaults() {
     _profile = FarmerProfile(
-      name: 'Kisan User',
-      phone: '+91 94311 02026',
-      village: 'Chanki',
-      district: 'Palamu',
-      state: 'Jharkhand',
+      name: '',
+      phone: '',
+      village: '',
+      district: '',
+      state: '',
       language: 'English',
+      totalArea: 0.0,
+      kisanId: '',
+      aadhaarLinked: false,
+      soilType: '',
     );
 
     final defaultFarm = Farm(
-      farmerName: 'Kisan User',
-      village: 'Chanki',
-      district: 'Palamu',
-      state: 'Jharkhand',
-      totalArea: 2.0,
-      fields: [
-        Field(name: 'North Plot', area: 1.0, crop: 'Ashwagandha'),
-        Field(name: 'South Plot', area: 1.0, crop: 'Tulsi'),
-      ],
-      crops: [
-        Crop(
-          name: 'Ashwagandha',
-          variety: 'Nagori / JA-20',
-          growthStage: 'Early vegetative',
-          sowingDate: DateTime(2026, 9, 20),
-          expectedHarvestDate: DateTime(2027, 2, 15),
-          notes: 'Drip irrigated, organic neem spray applied.',
-        ),
-        Crop(
-          name: 'Tulsi',
-          variety: 'Krishna Tulsi',
-          growthStage: 'Active growing',
-          sowingDate: DateTime(2026, 8, 10),
-          expectedHarvestDate: DateTime(2026, 12, 10),
-          notes: 'Intercropped with seasonal mustard on borders.',
-        ),
-      ],
+      farmerName: '',
+      village: '',
+      district: '',
+      state: '',
+      totalArea: 0.0,
+      fields: [],
+      crops: [],
     );
 
     _farms = [defaultFarm];
 
-    _diaryEntries = [
-      DiaryEntry(
-        id: '1',
-        title: 'Checked leaves',
-        category: 'Ashwagandha · 1 acre',
-        date: 'Today',
-        notes: 'Observed healthy growth on Ashwagandha plot #1.',
-      ),
-      DiaryEntry(
-        id: '2',
-        title: 'Watered',
-        category: 'Tulsi · 1 acre',
-        date: 'Yesterday',
-        notes: 'Ran morning drip cycle for 45 minutes on Field #2.',
-      ),
-      DiaryEntry(
-        id: '3',
-        title: 'Weeded',
-        category: 'Ashwagandha · 1 acre',
-        date: '2 days ago',
-        notes: 'Removed localized weed growth near drainage bunds.',
-      ),
-      DiaryEntry(
-        id: '4',
-        title: 'Procured Certified Mustard Seeds',
-        category: 'Purchase',
-        date: '28 Oct 2026',
-        notes: 'Bought 3kg Pusa Bold seeds from block KVK center.',
-      ),
-    ];
+    _diaryEntries = [];
 
-    _ledgerEntries = [
-      LedgerEntry(
-        id: '1',
-        title: 'Advance Mandi Sale (Mustard 5 Qtls)',
-        cropName: 'Mustard',
-        category: 'Sale',
-        amount: 31000.0,
-        isIncome: true,
-        date: DateTime(2026, 11, 2),
-        notes: 'Sold to licensed commission agent at Medininagar Mandi.',
-      ),
-      LedgerEntry(
-        id: '2',
-        title: 'PM-KISAN 18th Installment DBT',
-        cropName: 'General',
-        category: 'Govt Subsidy',
-        amount: 2000.0,
-        isIncome: true,
-        date: DateTime(2026, 10, 20),
-        notes: 'Direct Benefit Transfer credited to Bank of India A/c.',
-      ),
-      LedgerEntry(
-        id: '3',
-        title: 'DAP Fertilizer (2 Bags)',
-        cropName: 'Mustard',
-        category: 'Fertilizer',
-        amount: 2700.0,
-        isIncome: false,
-        date: DateTime(2026, 10, 15),
-        notes: 'Purchased from PACS Cooperative Society Chanki.',
-      ),
-      LedgerEntry(
-        id: '4',
-        title: 'Tractor Ploughing (2 Hours)',
-        cropName: 'Mustard',
-        category: 'Diesel/Tractor',
-        amount: 1400.0,
-        isIncome: false,
-        date: DateTime(2026, 10, 12),
-        notes: 'Deep rotavator tillage by neighboring farmer tractor.',
-      ),
-      LedgerEntry(
-        id: '5',
-        title: 'Hybrid Mustard Seeds (Pusa Bold 3kg)',
-        cropName: 'Mustard',
-        category: 'Seed',
-        amount: 850.0,
-        isIncome: false,
-        date: DateTime(2026, 10, 10),
-        notes: 'Certified seed packet from Block Agriculture Office.',
-      ),
-      LedgerEntry(
-        id: '6',
-        title: 'Sowing Labor (2 Workers, 1 Day)',
-        cropName: 'Mustard',
-        category: 'Labor',
-        amount: 900.0,
-        isIncome: false,
-        date: DateTime(2026, 10, 16),
-        notes: 'Paid daily wage @ ₹450/day per laborer.',
-      ),
-      LedgerEntry(
-        id: '7',
-        title: 'Diesel for Tubewell Pump (4 Hours)',
-        cropName: 'Mustard',
-        category: 'Irrigation',
-        amount: 480.0,
-        isIncome: false,
-        date: DateTime(2026, 10, 28),
-        notes: 'Pre-flowering critical first irrigation.',
-      ),
-      LedgerEntry(
-        id: '8',
-        title: 'Urea Fertilizer (1 Bag)',
-        cropName: 'Mustard',
-        category: 'Fertilizer',
-        amount: 267.0,
-        isIncome: false,
-        date: DateTime(2026, 10, 30),
-        notes: 'Subsidized neem-coated urea top dressing.',
-      ),
-    ];
+    _ledgerEntries = [];
 
     _rentalEquipment = [
       const RentalEquipment(
@@ -560,26 +434,7 @@ class StorageService extends ChangeNotifier {
       ),
     ];
 
-    _marketListings = [
-      {
-        'id': '1',
-        'crop': 'Yellow Mustard',
-        'quantity': '35 Quintals',
-        'price': '₹6,150 / Qtl',
-        'location': 'Palamu Farm Gate',
-        'date': '05 Nov 2026',
-        'phone': '9876543210',
-      },
-      {
-        'id': '2',
-        'crop': 'Sharbati Wheat',
-        'quantity': '50 Quintals',
-        'price': '₹2,450 / Qtl',
-        'location': 'Daltonganj Mandi Road',
-        'date': '02 Nov 2026',
-        'phone': '9876543210',
-      },
-    ];
+    _marketListings = [];
   }
 
   Future<void> _persistToDisk() async {
@@ -604,7 +459,17 @@ class StorageService extends ChangeNotifier {
 
   // Farm operations
   Farm getPrimaryFarm() {
-    if (_farms.isEmpty) _loadDefaults();
+    if (_farms.isEmpty) {
+      _farms.add(Farm(
+        farmerName: _profile.name,
+        village: _profile.village,
+        district: _profile.district,
+        state: _profile.state,
+        totalArea: _profile.totalArea,
+        fields: [],
+        crops: [],
+      ));
+    }
     return _farms.first;
   }
 

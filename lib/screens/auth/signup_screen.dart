@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import '../../main.dart';
 import '../../models/crop.dart';
 import '../../models/farm.dart';
-import '../../models/farmer_profile.dart';
 import '../../services/storage_service.dart';
 
 class SignupProfileScreen extends StatefulWidget {
@@ -57,8 +56,8 @@ class _SignupProfileScreenState extends State<SignupProfileScreen> {
   void initState() {
     super.initState();
     final prof = StorageService().getProfile();
-    _nameController = TextEditingController(text: prof.name.isNotEmpty ? prof.name : 'Kisan User');
-    _villageController = TextEditingController(text: prof.village.isNotEmpty ? prof.village : 'Chanki');
+    _nameController = TextEditingController(text: prof.name.isNotEmpty && prof.name != 'Kisan User' ? prof.name : '');
+    _villageController = TextEditingController(text: prof.village.isNotEmpty && prof.village != 'Chanki' ? prof.village : '');
     if (prof.district.isNotEmpty && _districts.contains(prof.district)) {
       _district = prof.district;
     }
@@ -261,8 +260,21 @@ class _SignupProfileScreenState extends State<SignupProfileScreen> {
   }
 
   Future<void> _onStartFarming() async {
-    final name = _nameController.text.trim().isEmpty ? 'Kisan User' : _nameController.text.trim();
-    final village = _villageController.text.trim().isEmpty ? 'Chanki' : _villageController.text.trim();
+    final name = _nameController.text.trim();
+    if (name.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Please enter your name',
+            style: TextStyle(fontFamily: 'Mukta', fontWeight: FontWeight.w600),
+          ),
+          backgroundColor: Color(0xFF1E4D2B),
+          duration: Duration(seconds: 2),
+        ),
+      );
+      return;
+    }
+    final village = _villageController.text.trim().isEmpty ? 'Village' : _villageController.text.trim();
     final phone = widget.phoneNumber != null && widget.phoneNumber!.isNotEmpty
         ? '+91 ${widget.phoneNumber}'
         : StorageService().getProfile().phone;
@@ -478,6 +490,13 @@ class _SignupProfileScreenState extends State<SignupProfileScreen> {
                                   color: Color(0xFF1B2A21),
                                 ),
                                 decoration: const InputDecoration(
+                                  hintText: 'Enter your full name',
+                                  hintStyle: TextStyle(
+                                    fontFamily: 'Mukta',
+                                    fontSize: 16,
+                                    color: Color(0xFF9EAFA4),
+                                    fontWeight: FontWeight.w400,
+                                  ),
                                   border: InputBorder.none,
                                   isDense: true,
                                   contentPadding: EdgeInsets.zero,
@@ -523,6 +542,13 @@ class _SignupProfileScreenState extends State<SignupProfileScreen> {
                                             color: Color(0xFF1B2A21),
                                           ),
                                           decoration: const InputDecoration(
+                                            hintText: 'Enter village',
+                                            hintStyle: TextStyle(
+                                              fontFamily: 'Mukta',
+                                              fontSize: 16,
+                                              color: Color(0xFF9EAFA4),
+                                              fontWeight: FontWeight.w400,
+                                            ),
                                             border: InputBorder.none,
                                             isDense: true,
                                             contentPadding: EdgeInsets.zero,

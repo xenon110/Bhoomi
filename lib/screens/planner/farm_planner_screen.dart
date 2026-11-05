@@ -15,8 +15,17 @@ class FarmPlannerScreen extends StatefulWidget {
 
 class _FarmPlannerScreenState extends State<FarmPlannerScreen> {
   final StorageService _storage = StorageService();
-  double _landArea = 2.0;
+  double _landArea = 1.0;
   String _selectedCrop = 'Mustard';
+
+  @override
+  void initState() {
+    super.initState();
+    final area = _storage.getPrimaryFarm().totalArea;
+    if (area > 0) {
+      _landArea = area;
+    }
+  }
 
   final Map<String, Map<String, dynamic>> _cropGuides = {
     'Mustard': {

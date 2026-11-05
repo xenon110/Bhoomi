@@ -8,7 +8,7 @@ import '../../widgets/safe_local_image.dart';
 
 class BoundaryCanvasScreen extends StatefulWidget {
   final double initialArea;
-  const BoundaryCanvasScreen({Key? key, this.initialArea = 2.0}) : super(key: key);
+  const BoundaryCanvasScreen({Key? key, this.initialArea = 1.0}) : super(key: key);
 
   @override
   State<BoundaryCanvasScreen> createState() => _BoundaryCanvasScreenState();

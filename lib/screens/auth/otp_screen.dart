@@ -19,8 +19,7 @@ class OtpVerificationScreen extends StatefulWidget {
 }
 
 class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
-  // Prepopulate initial demo value '481' to closely match the HTML screenshot design
-  String _otp = '481';
+  String _otp = '';
   int _secondsRemaining = 30;
   Timer? _countdownTimer;
 
@@ -129,7 +128,7 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
       final end = raw.substring(raw.length - 3);
       return '+91 ${start}XXX XX$end';
     }
-    return '+91 98XXX XX210';
+    return raw.isNotEmpty ? '+91 $raw' : '+91 Mobile';
   }
 
   @override

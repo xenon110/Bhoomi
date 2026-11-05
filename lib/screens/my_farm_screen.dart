@@ -218,7 +218,9 @@ class _MyFarmScreenState extends State<MyFarmScreen> {
                         left: 18,
                         top: 34,
                         child: Text(
-                          '${_farm.totalArea.toInt() == _farm.totalArea ? _farm.totalArea.toInt() : _farm.totalArea} acres',
+                          _farm.totalArea > 0
+                              ? '${_farm.totalArea.toInt() == _farm.totalArea ? _farm.totalArea.toInt() : _farm.totalArea} acres'
+                              : '0 acres',
                           style: const TextStyle(
                             fontSize: 46,
                             fontWeight: FontWeight.w600,
@@ -336,15 +338,47 @@ class _MyFarmScreenState extends State<MyFarmScreen> {
                   ),
                 ],
               ),
-              child: Column(
-                children: [
-                  for (int i = 0; i < _farm.crops.length; i++) ...[
-                    _buildDynamicCropRow(_farm.crops[i]),
-                    if (i < _farm.crops.length - 1)
-                      const Divider(height: 1, thickness: 1, color: Color(0xFFEEE8DA)),
-                  ],
-                ],
-              ),
+              child: _farm.crops.isEmpty
+                  ? Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 16),
+                      child: Center(
+                        child: Column(
+                          children: const [
+                            Icon(Icons.grass_rounded, size: 36, color: Color(0xFF8A9A86)),
+                            SizedBox(height: 8),
+                            Text(
+                              'No crops added yet',
+                              style: TextStyle(
+                                fontFamily: 'Mukta',
+                                fontSize: 16,
+                                fontWeight: FontWeight.w600,
+                                color: Color(0xFF1B2A21),
+                              ),
+                            ),
+                            SizedBox(height: 4),
+                            Text(
+                              'Tap "+ Add crop" above to record your current crop plantings and growth stages.',
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                fontFamily: 'Mukta',
+                                fontSize: 13,
+                                fontWeight: FontWeight.w400,
+                                color: Color(0xFF55655A),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    )
+                  : Column(
+                      children: [
+                        for (int i = 0; i < _farm.crops.length; i++) ...[
+                          _buildDynamicCropRow(_farm.crops[i]),
+                          if (i < _farm.crops.length - 1)
+                            const Divider(height: 1, thickness: 1, color: Color(0xFFEEE8DA)),
+                        ],
+                      ],
+                    ),
             ),
 
             const SizedBox(height: 16),

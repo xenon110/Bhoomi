@@ -16,7 +16,7 @@ class FarmerProfile {
 
   FarmerProfile({
     required this.name,
-    this.phone = '+91 98765 43210',
+    this.phone = '',
     required this.village,
     required this.district,
     required this.state,
@@ -25,10 +25,10 @@ class FarmerProfile {
     this.pestAlerts = true,
     this.mandiAlerts = true,
     this.irrigationAlerts = true,
-    this.kisanId = 'KCC-JH-PLM-4821',
-    this.aadhaarLinked = true,
-    this.soilType = 'Loamy / Sandy Loam',
-    this.totalArea = 2.0,
+    this.kisanId = '',
+    this.aadhaarLinked = false,
+    this.soilType = '',
+    this.totalArea = 0.0,
   });
 
   String get location => '$village, $district';
@@ -98,20 +98,20 @@ class FarmerProfile {
 
   factory FarmerProfile.fromJson(Map<String, dynamic> json) {
     return FarmerProfile(
-      name: json['name'] as String? ?? 'Kisan User',
-      phone: json['phone'] as String? ?? '+91 98765 43210',
-      village: json['village'] as String? ?? 'Chianki',
-      district: json['district'] as String? ?? 'Palamu',
-      state: json['state'] as String? ?? 'Jharkhand',
+      name: json['name'] as String? ?? '',
+      phone: json['phone'] as String? ?? '',
+      village: json['village'] as String? ?? '',
+      district: json['district'] as String? ?? '',
+      state: json['state'] as String? ?? '',
       language: json['language'] as String? ?? 'English',
       weatherAlerts: json['weatherAlerts'] as bool? ?? true,
       pestAlerts: json['pestAlerts'] as bool? ?? true,
       mandiAlerts: json['mandiAlerts'] as bool? ?? true,
       irrigationAlerts: json['irrigationAlerts'] as bool? ?? true,
-      kisanId: json['kisanId'] as String? ?? 'KCC-JH-PLM-4821',
-      aadhaarLinked: json['aadhaarLinked'] as bool? ?? true,
-      soilType: json['soilType'] as String? ?? 'Loamy / Sandy Loam',
-      totalArea: (json['totalArea'] as num?)?.toDouble() ?? 2.0,
+      kisanId: json['kisanId'] as String? ?? '',
+      aadhaarLinked: json['aadhaarLinked'] as bool? ?? false,
+      soilType: json['soilType'] as String? ?? '',
+      totalArea: (json['totalArea'] as num?)?.toDouble() ?? 0.0,
     );
   }
 }

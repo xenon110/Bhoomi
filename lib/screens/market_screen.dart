@@ -42,11 +42,14 @@ class _MarketScreenState extends State<MarketScreen> {
   }
 
   void _showPostBatchModal(bool isHindi) {
+    final profile = _storage.getProfile();
     String selectedCrop = 'Yellow Mustard';
-    final qtyCtrl = TextEditingController(text: '40');
-    final priceCtrl = TextEditingController(text: '6200');
-    final locCtrl = TextEditingController(text: 'Palamu Farmland');
-    final phoneCtrl = TextEditingController(text: '9876543210');
+    final qtyCtrl = TextEditingController();
+    final priceCtrl = TextEditingController();
+    final userLoc = [profile.village, profile.district].where((s) => s.isNotEmpty).join(', ');
+    final locCtrl = TextEditingController(text: userLoc);
+    final userPhone = profile.phone.replaceAll('+91 ', '').replaceAll('+91', '').trim();
+    final phoneCtrl = TextEditingController(text: userPhone);
 
     final availableCrops = ['Yellow Mustard', 'Sharbati Wheat', 'Potato', 'Gram / Chickpea', 'Paddy / Rice', 'Maize'];
 
@@ -161,6 +164,7 @@ class _MarketScreenState extends State<MarketScreen> {
                                 keyboardType: TextInputType.number,
                                 style: const TextStyle(fontFamily: 'Mukta', fontSize: 14),
                                 decoration: InputDecoration(
+                                  hintText: 'e.g. 40',
                                   suffixText: 'Qtl',
                                   filled: true,
                                   fillColor: const Color(0xFFF6F2E9),
@@ -186,6 +190,7 @@ class _MarketScreenState extends State<MarketScreen> {
                                 keyboardType: TextInputType.number,
                                 style: const TextStyle(fontFamily: 'Mukta', fontSize: 14),
                                 decoration: InputDecoration(
+                                  hintText: 'e.g. 6200',
                                   prefixText: '₹ ',
                                   filled: true,
                                   fillColor: const Color(0xFFF6F2E9),
@@ -211,7 +216,29 @@ class _MarketScreenState extends State<MarketScreen> {
                       controller: locCtrl,
                       style: const TextStyle(fontFamily: 'Mukta', fontSize: 14),
                       decoration: InputDecoration(
-                        hintText: 'e.g. Palamu Farm Gate',
+                        hintText: isHindi ? 'उदा. गांव का नाम / नजदीकी मंडी' : 'e.g. Village or nearest mandi',
+                        filled: true,
+                        fillColor: const Color(0xFFF6F2E9),
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none),
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                      ),
+                    ),
+
+                    const SizedBox(height: 14),
+
+                    // Contact Phone
+                    Text(
+                      isHindi ? 'संपर्क मोबाइल नंबर (Contact Number)' : 'Contact Phone Number',
+                      style: const TextStyle(fontFamily: 'Mukta', fontSize: 13, fontWeight: FontWeight.w600, color: Color(0xFF1B2A21)),
+                    ),
+                    const SizedBox(height: 6),
+                    TextField(
+                      controller: phoneCtrl,
+                      keyboardType: TextInputType.phone,
+                      style: const TextStyle(fontFamily: 'Mukta', fontSize: 14),
+                      decoration: InputDecoration(
+                        hintText: 'e.g. 9876543210',
+                        prefixText: '+91 ',
                         filled: true,
                         fillColor: const Color(0xFFF6F2E9),
                         border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none),
@@ -230,7 +257,9 @@ class _MarketScreenState extends State<MarketScreen> {
                           'crop': selectedCrop,
                           'quantity': '${qtyCtrl.text.trim()} Quintals',
                           'price': '₹${priceCtrl.text.trim()} / Qtl',
-                          'location': locCtrl.text.trim().isEmpty ? 'Palamu Farmland' : locCtrl.text.trim(),
+                          'location': locCtrl.text.trim().isNotEmpty
+                              ? locCtrl.text.trim()
+                              : (profile.village.isNotEmpty ? profile.village : 'Local Mandi'),
                           'date': 'Today',
                           'phone': phoneCtrl.text.trim(),
                         };
