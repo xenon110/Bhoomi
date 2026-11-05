@@ -1260,14 +1260,20 @@ class _HomeScreenState extends State<HomeScreen> {
                   final plotText = farm.totalArea > 0
                       ? '${farm.totalArea} Acres · ${farm.village.isNotEmpty ? farm.village : (isHindi ? "खेत" : "Farmland")}'
                       : (farm.village.isNotEmpty ? farm.village : (isHindi ? "सक्रिय खेत" : "Active Plot"));
+                  final varietyText = (crop.variety != null && crop.variety!.trim().isNotEmpty)
+                      ? '${isHindi ? "किस्म:" : "Variety:"} ${crop.variety!}'
+                      : ((crop.notes != null && crop.notes!.trim().isNotEmpty)
+                          ? crop.notes!
+                          : (isHindi ? 'सक्रिय खेती' : 'Active Growth'));
+                  final stageText = (crop.growthStage != null && crop.growthStage!.trim().isNotEmpty)
+                      ? crop.growthStage!
+                      : (isHindi ? 'अनुकूल स्थिति' : 'Healthy');
 
                   return _buildCropCard(
                     imagePath: img,
                     cropName: crop.name,
-                    variety: crop.variety.isNotEmpty
-                        ? '${isHindi ? "किस्म:" : "Variety:"} ${crop.variety}'
-                        : (crop.notes.isNotEmpty ? crop.notes : (isHindi ? 'सक्रिय खेती' : 'Active Growth')),
-                    stage: crop.growthStage.isNotEmpty ? crop.growthStage : (isHindi ? 'अनुकूल स्थिति' : 'Healthy'),
+                    variety: varietyText,
+                    stage: stageText,
                     plotInfo: plotText,
                     badgeBg: const Color(0xFFE2EFDF),
                     badgeTextColor: const Color(0xFF1E4D2B),
