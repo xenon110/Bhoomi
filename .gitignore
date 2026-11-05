@@ -27,3 +27,6 @@ android/**/GeneratedPluginRegistrant.java
 # Symbols / Cache
 *.dill
 *.cache
+
+# APK outputs
+*.apk
