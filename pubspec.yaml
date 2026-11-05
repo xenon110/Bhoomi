@@ -1,0 +1,27 @@
+name: bhoomi_app
+description: Bhoomi – Smart Decisions. Better Farming. Stronger Harvests.
+publish_to: 'none'
+version: 1.0.0
+
+environment:
+  sdk: '>=3.2.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  cupertino_icons: ^1.0.6
+  intl: ^0.20.2
+  flutter_localizations:
+    sdk: flutter
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/images/
+    - assets/images/farmer_hero.jpg
+    - assets/images/mustard_crop.jpg
+    - assets/images/wheat_crop.jpg
+    - assets/images/farmer_field.jpg
+    - assets/images/optimized_farmland.jpg
+    - assets/images/tractor_rental.jpg
+    - assets/images/farmland_sale.jpg
