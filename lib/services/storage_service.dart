@@ -16,7 +16,9 @@ import '../models/rental_equipment.dart';
 class StorageService extends ChangeNotifier {
   static final StorageService _instance = StorageService._internal();
   factory StorageService() => _instance;
-  StorageService._internal();
+  StorageService._internal() {
+    _loadDefaults();
+  }
 
   bool _isInitialized = false;
 

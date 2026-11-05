@@ -9,7 +9,6 @@ import 'screens/my_farm_screen.dart';
 import 'screens/planner/farm_planner_screen.dart';
 import 'screens/profile_screen.dart';
 import 'screens/scan/scan_ask_screen.dart';
-import 'screens/tools/fertilizer_calculator_screen.dart';
 import 'screens/tools/kisan_yojana_screen.dart';
 import 'screens/equipment/equipment_rental_screen.dart';
 import 'screens/land/land_marketplace_screen.dart';

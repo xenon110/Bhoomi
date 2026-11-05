@@ -1,15 +1,11 @@
-import 'dart:io';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 /// A robust image loader for the Bhoomi app:
 /// 1. Attempts to load local asset [imagePath].
-/// 2. If running during hot-restart where asset is not yet baked into the APK manifest,
-///    falls back to direct disk file.
-/// 3. If file is unavailable on device, falls back to a high-resolution CDN photo.
-/// 4. If offline, falls back to an elegant agricultural themed container.
+/// 2. If image is unavailable or network fails, falls back to high-resolution agricultural CDN photo.
+/// 3. If offline, falls back to an elegant agricultural themed container.
 ///
-/// Guaranteed NEVER to throw or show Flutter's red X ErrorWidget.
+/// Guaranteed NEVER to throw or show Flutter's red X ErrorWidget on any platform (Web, Android, iOS).
 class SafeLocalImage extends StatelessWidget {
   final String imagePath;
   final double? width;
@@ -56,33 +52,7 @@ class SafeLocalImage extends StatelessWidget {
       fit: fit,
       alignment: alignment,
       errorBuilder: (context, error, stackTrace) {
-        // Fallback 1: Local disk file (works on desktop/emulators where assets exist on filesystem)
-        if (!kIsWeb) {
-          try {
-            final f = File(imagePath);
-            if (f.existsSync()) {
-              return Image.file(
-                f,
-                width: width,
-                height: height,
-                fit: fit,
-                alignment: alignment,
-              );
-            }
-            final f2 = File('build/flutter_assets/$imagePath');
-            if (f2.existsSync()) {
-              return Image.file(
-                f2,
-                width: width,
-                height: height,
-                fit: fit,
-                alignment: alignment,
-              );
-            }
-          } catch (_) {}
-        }
-
-        // Fallback 2: High-resolution agricultural CDN photo matching the crop
+        // Fallback: High-resolution agricultural CDN photo matching the crop
         final netUrl = networkFallbackUrl ?? _defaultNetworkFallbacks[imagePath];
         if (netUrl != null) {
           return Image.network(
@@ -101,7 +71,7 @@ class SafeLocalImage extends StatelessWidget {
           );
         }
 
-        // Fallback 3: Clean eco card
+        // Final Fallback: Clean eco placeholder card
         return fallback ?? _buildPlaceholder();
       },
     );

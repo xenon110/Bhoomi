@@ -1,5 +1,3 @@
-import 'dart:convert';
-
 class DailyForecast {
   final String day;
   final String temp;

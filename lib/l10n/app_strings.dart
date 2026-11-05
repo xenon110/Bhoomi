@@ -5,10 +5,12 @@ class AppLanguage extends ChangeNotifier {
   static final AppLanguage _instance = AppLanguage._internal();
   factory AppLanguage() => _instance;
   AppLanguage._internal() {
-    final profLang = StorageService().getProfile().language;
-    if (profLang.isNotEmpty) {
-      _currentLang = profLang;
-    }
+    try {
+      final profLang = StorageService().getProfile().language;
+      if (profLang.isNotEmpty) {
+        _currentLang = profLang;
+      }
+    } catch (_) {}
   }
 
   String _currentLang = 'English';

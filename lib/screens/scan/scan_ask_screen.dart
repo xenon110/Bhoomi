@@ -641,11 +641,11 @@ class _LeafScanPreviewPainter extends CustomPainter {
       ..strokeCap = StrokeCap.round
       ..style = PaintingStyle.stroke;
 
-    final double bx = size.width - 120;
-    final double by = 25;
-    const double bw = 100;
-    const double bh = 105;
-    const double len = 20;
+    final double bx = (size.width - 120).clamp(10.0, 500.0);
+    const double by = 25.0;
+    const double bw = 100.0;
+    const double bh = 105.0;
+    const double len = 20.0;
 
     // Top-Left bracket
     canvas.drawLine(Offset(bx, by), Offset(bx + len, by), bracketPaint);
