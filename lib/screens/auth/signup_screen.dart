@@ -22,7 +22,7 @@ class _SignupProfileScreenState extends State<SignupProfileScreen> {
   String _soilType = 'Loamy / Sandy Loam';
   double _landArea = 2.0;
 
-  final Set<String> _selectedCrops = {'Ashwagandha', 'Tulsi'};
+  final Set<String> _selectedCrops = <String>{};
 
   final List<String> _states = const [
     'Jharkhand',
@@ -79,12 +79,12 @@ class _SignupProfileScreenState extends State<SignupProfileScreen> {
   void initState() {
     super.initState();
     final prof = StorageService().getProfile();
-    _nameController = TextEditingController(text: prof.name.isNotEmpty && prof.name != 'Kisan User' ? prof.name : '');
-    _villageController = TextEditingController(text: prof.village.isNotEmpty && prof.village != 'Chanki' ? prof.village : '');
+    _nameController = TextEditingController();
+    _villageController = TextEditingController();
     if (prof.district.isNotEmpty && _districts.contains(prof.district)) {
       _district = prof.district;
     }
-    if (prof.totalArea > 0) {
+    if (widget.phoneNumber == null && prof.totalArea > 0) {
       _landArea = prof.totalArea;
     }
     if (prof.state.isNotEmpty && _states.contains(prof.state)) {
@@ -191,7 +191,7 @@ class _SignupProfileScreenState extends State<SignupProfileScreen> {
                           ),
                           alignment: Alignment.center,
                           child: Text(
-                            isSelected ? '✓ $crop' : crop,
+                            isSelected ? 'âœ“ $crop' : crop,
                             style: TextStyle(
                               fontFamily: 'Mukta',
                               fontSize: 14.5,
@@ -510,19 +510,13 @@ class _SignupProfileScreenState extends State<SignupProfileScreen> {
       body: SafeArea(
         top: true,
         bottom: true,
-        child: SizedBox.expand(
-          child: FittedBox(
-            fit: BoxFit.contain,
-            alignment: Alignment.center,
-            child: SizedBox(
-              width: 390,
-              height: 844,
-              child: Container(
-                color: const Color(0xFFF6F2E9),
-                child: Column(
-                  children: [
-                    // Top Bar: Back Button + STEP 2 OF 2 Progress Bar
-                    Padding(
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 500),
+            child: Column(
+              children: [
+                // Top Bar: Back Button + STEP 2 OF 2 Progress Bar
+                Padding(
                       padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
                       child: Row(
                         children: [
@@ -1023,7 +1017,7 @@ class _SignupProfileScreenState extends State<SignupProfileScreen> {
                                       ),
                                       alignment: Alignment.center,
                                       child: Text(
-                                        isSelected ? '✓ $crop' : crop,
+                                        isSelected ? 'âœ“ $crop' : crop,
                                         style: TextStyle(
                                           fontFamily: 'Mukta',
                                           fontSize: 14.5,
@@ -1113,9 +1107,7 @@ class _SignupProfileScreenState extends State<SignupProfileScreen> {
               ),
             ),
           ),
-        ),
-      ),
-    );
+        );
   }
 }
 

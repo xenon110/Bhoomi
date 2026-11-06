@@ -62,7 +62,7 @@ class _LoginScreenState extends State<LoginScreen> {
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
         content: Text(
-          '🎙️ बोलिए अपना 10 अंकों का मोबाइल नंबर...',
+          'ðŸŽ™ï¸ à¤¬à¥‹à¤²à¤¿à¤ à¤…à¤ªà¤¨à¤¾ 10 à¤…à¤‚à¤•à¥‹à¤‚ à¤•à¤¾ à¤®à¥‹à¤¬à¤¾à¤‡à¤² à¤¨à¤‚à¤¬à¤°...',
           style: TextStyle(fontFamily: 'Mukta', fontWeight: FontWeight.w700, fontSize: 16),
         ),
         backgroundColor: Color(0xFF1E4D2B),
@@ -104,28 +104,25 @@ class _LoginScreenState extends State<LoginScreen> {
       body: SafeArea(
         top: false,
         bottom: true,
-        child: SizedBox.expand(
-          child: FittedBox(
-            fit: BoxFit.contain,
-            alignment: Alignment.center,
-            child: SizedBox(
-              width: 390,
-              height: 844,
-              child: Container(
-                color: const Color(0xFFF6F2E9),
-                child: Column(
-                  children: [
-                    // 1. Top 250px Forest Green Landscape Header
-                    SizedBox(
-                      height: 250,
-                      width: 390,
-                      child: Stack(
-                        children: [
-                          // Background Hills & Sun Custom Painter
-                          CustomPaint(
-                            size: const Size(390, 250),
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 500),
+            child: SingleChildScrollView(
+              physics: const ClampingScrollPhysics(),
+              child: Column(
+                children: [
+                  // 1. Top 250px Forest Green Landscape Header
+                  SizedBox(
+                    height: 250,
+                    width: double.infinity,
+                    child: Stack(
+                      children: [
+                        // Background Hills & Sun Custom Painter
+                        Positioned.fill(
+                          child: CustomPaint(
                             painter: _LoginLandscapePainter(),
                           ),
+                        ),
 
                           // Bhoomi Leaf Logo & Title
                           Positioned(
@@ -172,12 +169,11 @@ class _LoginScreenState extends State<LoginScreen> {
                       ),
                     ),
 
-                    // 2. Bottom Card Sheet (-28px overlap)
-                    Expanded(
-                      child: Transform.translate(
-                        offset: const Offset(0, -28),
-                        child: Container(
-                          width: 390,
+                  // 2. Bottom Card Sheet (-28px overlap)
+                  Transform.translate(
+                    offset: const Offset(0, -28),
+                    child: Container(
+                      width: double.infinity,
                           decoration: const BoxDecoration(
                             color: Color(0xFFF6F2E9),
                             borderRadius: BorderRadius.vertical(top: Radius.circular(34)),
@@ -238,7 +234,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                     ),
                                     alignment: Alignment.center,
                                     child: const Text(
-                                      '🇮🇳 +91',
+                                      'ðŸ‡®ðŸ‡³ +91',
                                       style: TextStyle(
                                         fontFamily: 'Mukta',
                                         fontSize: 17,
@@ -449,15 +445,13 @@ class _LoginScreenState extends State<LoginScreen> {
                           ),
                         ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
             ),
           ),
-        ),
-      ),
-    );
+        );
   }
 }
 
@@ -469,36 +463,36 @@ class _LoginLandscapePainter extends CustomPainter {
     final basePaint = Paint()..color = const Color(0xFF1E4D2B);
     canvas.drawRect(Rect.fromLTWH(0, 0, size.width, size.height), basePaint);
 
-    // 2. Sun Outer Glow (cx: 320, cy: 60, r: 44, opacity: 0.22, color: #F2B134)
+    // 2. Sun Outer Glow
     final sunGlowPaint = Paint()
       ..color = const Color(0xFFF2B134).withOpacity(0.22)
       ..style = PaintingStyle.fill;
-    canvas.drawCircle(const Offset(320, 60), 44, sunGlowPaint);
-
-    // 3. Sun Core (cx: 320, cy: 60, r: 26, color: #F2B134)
     final sunCorePaint = Paint()
       ..color = const Color(0xFFF2B134)
       ..style = PaintingStyle.fill;
-    canvas.drawCircle(const Offset(320, 60), 26, sunCorePaint);
+    final w = size.width;
+    final sunX = (w - 70).clamp(200.0, 450.0);
+    canvas.drawCircle(Offset(sunX, 60), 44, sunGlowPaint);
+    canvas.drawCircle(Offset(sunX, 60), 26, sunCorePaint);
 
-    // 4. Hill 1: M0 190 Q97.5 146 195 184 T390 170 V250 H0 z (#2B6A3E)
+    // 4. Hill 1
     final hill1Paint = Paint()..color = const Color(0xFF2B6A3E);
     final hill1Path = Path();
     hill1Path.moveTo(0, 190);
-    hill1Path.quadraticBezierTo(97.5, 146, 195.0, 184);
-    hill1Path.quadraticBezierTo(292.5, 222, 390, 170);
-    hill1Path.lineTo(390, 250);
+    hill1Path.quadraticBezierTo(w * 0.25, 146, w * 0.5, 184);
+    hill1Path.quadraticBezierTo(w * 0.75, 222, w, 170);
+    hill1Path.lineTo(w, 250);
     hill1Path.lineTo(0, 250);
     hill1Path.close();
     canvas.drawPath(hill1Path, hill1Paint);
 
-    // 5. Hill 2: M0 226 Q117 184 234 218 T390 204 V250 H0 z (#3A8350)
+    // 5. Hill 2
     final hill2Paint = Paint()..color = const Color(0xFF3A8350);
     final hill2Path = Path();
     hill2Path.moveTo(0, 226);
-    hill2Path.quadraticBezierTo(117.0, 184, 234.0, 218);
-    hill2Path.quadraticBezierTo(351.0, 252, 390, 204);
-    hill2Path.lineTo(390, 250);
+    hill2Path.quadraticBezierTo(w * 0.3, 184, w * 0.6, 218);
+    hill2Path.quadraticBezierTo(w * 0.9, 252, w, 204);
+    hill2Path.lineTo(w, 250);
     hill2Path.lineTo(0, 250);
     hill2Path.close();
     canvas.drawPath(hill2Path, hill2Paint);
