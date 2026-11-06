@@ -18,9 +18,32 @@ class _SignupProfileScreenState extends State<SignupProfileScreen> {
   late TextEditingController _villageController;
 
   String _district = 'Palamu';
+  String _state = 'Jharkhand';
+  String _soilType = 'Loamy / Sandy Loam';
   double _landArea = 2.0;
 
   final Set<String> _selectedCrops = {'Ashwagandha', 'Tulsi'};
+
+  final List<String> _states = const [
+    'Jharkhand',
+    'Bihar',
+    'Uttar Pradesh',
+    'Madhya Pradesh',
+    'Punjab',
+    'Haryana',
+    'Rajasthan',
+    'Maharashtra',
+    'West Bengal',
+    'Odisha',
+  ];
+
+  final List<String> _soilTypes = const [
+    'Loamy / Sandy Loam',
+    'Clay Loam',
+    'Black Soil',
+    'Red Soil',
+    'Alluvial Soil',
+  ];
 
   final List<String> _districts = const [
     'Palamu',
@@ -63,6 +86,12 @@ class _SignupProfileScreenState extends State<SignupProfileScreen> {
     }
     if (prof.totalArea > 0) {
       _landArea = prof.totalArea;
+    }
+    if (prof.state.isNotEmpty && _states.contains(prof.state)) {
+      _state = prof.state;
+    }
+    if (prof.soilType.isNotEmpty && _soilTypes.contains(prof.soilType)) {
+      _soilType = prof.soilType;
     }
   }
 
@@ -205,6 +234,114 @@ class _SignupProfileScreenState extends State<SignupProfileScreen> {
     );
   }
 
+  void _onSelectState() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: const Color(0xFFF6F2E9),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+      ),
+      builder: (context) {
+        return Padding(
+          padding: const EdgeInsets.fromLTRB(24, 20, 24, 28),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Select State',
+                style: TextStyle(
+                  fontFamily: 'Mukta',
+                  fontSize: 22,
+                  fontWeight: FontWeight.w800,
+                  color: Color(0xFF1B2A21),
+                ),
+              ),
+              const SizedBox(height: 12),
+              ..._states.map((s) {
+                final isSelected = s == _state;
+                return ListTile(
+                  title: Text(
+                    s,
+                    style: TextStyle(
+                      fontFamily: 'Mukta',
+                      fontSize: 18,
+                      fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
+                      color: isSelected ? const Color(0xFF1E4D2B) : const Color(0xFF1B2A21),
+                    ),
+                  ),
+                  trailing: isSelected
+                      ? const Icon(Icons.check_circle_rounded, color: Color(0xFF1E4D2B))
+                      : null,
+                  onTap: () {
+                    setState(() {
+                      _state = s;
+                    });
+                    Navigator.pop(context);
+                  },
+                );
+              }),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  void _onSelectSoilType() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: const Color(0xFFF6F2E9),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+      ),
+      builder: (context) {
+        return Padding(
+          padding: const EdgeInsets.fromLTRB(24, 20, 24, 28),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Select Soil Type',
+                style: TextStyle(
+                  fontFamily: 'Mukta',
+                  fontSize: 22,
+                  fontWeight: FontWeight.w800,
+                  color: Color(0xFF1B2A21),
+                ),
+              ),
+              const SizedBox(height: 12),
+              ..._soilTypes.map((st) {
+                final isSelected = st == _soilType;
+                return ListTile(
+                  title: Text(
+                    st,
+                    style: TextStyle(
+                      fontFamily: 'Mukta',
+                      fontSize: 17,
+                      fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
+                      color: isSelected ? const Color(0xFF1E4D2B) : const Color(0xFF1B2A21),
+                    ),
+                  ),
+                  trailing: isSelected
+                      ? const Icon(Icons.check_circle_rounded, color: Color(0xFF1E4D2B))
+                      : null,
+                  onTap: () {
+                    setState(() {
+                      _soilType = st;
+                    });
+                    Navigator.pop(context);
+                  },
+                );
+              }),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
   void _onSelectDistrict() {
     showModalBottomSheet(
       context: context,
@@ -279,13 +416,26 @@ class _SignupProfileScreenState extends State<SignupProfileScreen> {
         ? '+91 ${widget.phoneNumber}'
         : StorageService().getProfile().phone;
 
+    final stCode = _state.length >= 2 ? _state.substring(0, 2).toUpperCase() : 'JH';
+    final dtCode = _district.length >= 3 ? _district.substring(0, 3).toUpperCase() : 'PLM';
+    final randCode = (DateTime.now().millisecondsSinceEpoch % 9000 + 1000).toString();
+    final kisanId = 'KCC-$stCode-$dtCode-$randCode';
+
     // 1. Update Farmer Profile
     final updatedProfile = StorageService().getProfile().copyWith(
       name: name,
       phone: phone,
       village: village,
       district: _district,
+      state: _state,
+      soilType: _soilType,
       totalArea: _landArea,
+      kisanId: kisanId,
+      aadhaarLinked: true,
+      weatherAlerts: true,
+      pestAlerts: true,
+      mandiAlerts: true,
+      irrigationAlerts: true,
     );
     await StorageService().updateProfile(updatedProfile);
 
@@ -298,17 +448,26 @@ class _SignupProfileScreenState extends State<SignupProfileScreen> {
 
     for (int i = 0; i < cropList.length; i++) {
       final cName = cropList[i];
-      final plotLabel = i == 0 ? 'North Plot' : (i == 1 ? 'South Plot' : 'East Plot #$i');
-      fields.add(Field(name: plotLabel, area: areaPerCrop, crop: cName));
+      final plotLabel = i == 0 ? 'North Plot' : (i == 1 ? 'South Plot' : 'East Plot #${i + 1}');
+      fields.add(Field(
+        name: plotLabel,
+        area: areaPerCrop,
+        crop: cName,
+        sowingDate: DateTime.now().subtract(const Duration(days: 30)),
+      ));
       crops.add(Crop(
         name: cName,
         variety: cName == 'Ashwagandha'
             ? 'Nagori / JA-20'
-            : (cName == 'Tulsi' ? 'Krishna Tulsi' : 'Certified Hybrid'),
+            : (cName == 'Tulsi'
+                ? 'Krishna Tulsi'
+                : (cName == 'Mustard'
+                    ? 'Varuna (T-59)'
+                    : (cName == 'Wheat' ? 'Sharbati HD-2967' : 'Certified Hybrid'))),
         growthStage: 'Active vegetative',
-        sowingDate: DateTime(2026, 9, 20),
-        expectedHarvestDate: DateTime(2027, 2, 15),
-        notes: 'Cultivated under organic practices with drip irrigation.',
+        sowingDate: DateTime.now().subtract(const Duration(days: 30)),
+        expectedHarvestDate: DateTime.now().add(const Duration(days: 90)),
+        notes: 'Cultivated under organic practices with precision drip irrigation.',
       ));
     }
 
@@ -316,7 +475,7 @@ class _SignupProfileScreenState extends State<SignupProfileScreen> {
       farmerName: name,
       village: village,
       district: _district,
-      state: 'Jharkhand',
+      state: _state,
       totalArea: _landArea,
       fields: fields,
       crops: crops,
@@ -324,7 +483,7 @@ class _SignupProfileScreenState extends State<SignupProfileScreen> {
     await StorageService().updatePrimaryFarm(farm);
 
     // 3. Trigger cloud sync to Turso Edge database in background
-    StorageService().syncAllToTurso();
+    await StorageService().syncAllToTurso();
 
     // 4. Navigate to MainNavigation
     if (!mounted) return;
@@ -595,6 +754,120 @@ class _SignupProfileScreenState extends State<SignupProfileScreen> {
                                                   fontSize: 17,
                                                   fontWeight: FontWeight.w700,
                                                   color: Color(0xFF1B2A21),
+                                                ),
+                                              ),
+                                              const Icon(
+                                                Icons.keyboard_arrow_down_rounded,
+                                                color: Color(0xFF1B2A21),
+                                                size: 20,
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
+
+                            const SizedBox(height: 12),
+
+                            // State & Soil Type
+                            Row(
+                              children: [
+                                // State
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      const Text(
+                                        'State',
+                                        style: TextStyle(
+                                          fontFamily: 'Mukta',
+                                          fontSize: 13.5,
+                                          fontWeight: FontWeight.w800,
+                                          color: Color(0xFF3F5547),
+                                        ),
+                                      ),
+                                      const SizedBox(height: 6),
+                                      GestureDetector(
+                                        onTap: _onSelectState,
+                                        child: Container(
+                                          height: 56,
+                                          decoration: BoxDecoration(
+                                            color: Colors.white,
+                                            borderRadius: BorderRadius.circular(18),
+                                            border: Border.all(color: const Color(0xFFDDD6C4), width: 1.5),
+                                          ),
+                                          padding: const EdgeInsets.symmetric(horizontal: 16),
+                                          child: Row(
+                                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                            children: [
+                                              Flexible(
+                                                child: Text(
+                                                  _state,
+                                                  overflow: TextOverflow.ellipsis,
+                                                  style: const TextStyle(
+                                                    fontFamily: 'Mukta',
+                                                    fontSize: 16,
+                                                    fontWeight: FontWeight.w700,
+                                                    color: Color(0xFF1B2A21),
+                                                  ),
+                                                ),
+                                              ),
+                                              const Icon(
+                                                Icons.keyboard_arrow_down_rounded,
+                                                color: Color(0xFF1B2A21),
+                                                size: 20,
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                const SizedBox(width: 10),
+
+                                // Soil Type
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      const Text(
+                                        'Soil Type',
+                                        style: TextStyle(
+                                          fontFamily: 'Mukta',
+                                          fontSize: 13.5,
+                                          fontWeight: FontWeight.w800,
+                                          color: Color(0xFF3F5547),
+                                        ),
+                                      ),
+                                      const SizedBox(height: 6),
+                                      GestureDetector(
+                                        onTap: _onSelectSoilType,
+                                        child: Container(
+                                          height: 56,
+                                          decoration: BoxDecoration(
+                                            color: Colors.white,
+                                            borderRadius: BorderRadius.circular(18),
+                                            border: Border.all(color: const Color(0xFFDDD6C4), width: 1.5),
+                                          ),
+                                          padding: const EdgeInsets.symmetric(horizontal: 16),
+                                          child: Row(
+                                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                            children: [
+                                              Flexible(
+                                                child: Text(
+                                                  _soilType,
+                                                  overflow: TextOverflow.ellipsis,
+                                                  style: const TextStyle(
+                                                    fontFamily: 'Mukta',
+                                                    fontSize: 14.5,
+                                                    fontWeight: FontWeight.w700,
+                                                    color: Color(0xFF1B2A21),
+                                                  ),
                                                 ),
                                               ),
                                               const Icon(

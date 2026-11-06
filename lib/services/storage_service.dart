@@ -115,17 +115,17 @@ class StorageService extends ChangeNotifier {
     try {
       // 1. Profile Cloud Sync
       final cloudProfile = await TursoService().fetchProfileCloud();
-      if (cloudProfile != null) {
+      if (cloudProfile != null && cloudProfile.name.isNotEmpty && cloudProfile.name != 'Kisan User') {
         _profile = cloudProfile;
-      } else {
+      } else if (_profile.name.isNotEmpty) {
         await TursoService().upsertProfileCloud(_profile);
       }
 
       // 2. Farms & Fields Cloud Sync
       final cloudFarms = await TursoService().fetchFarmsCloud();
-      if (cloudFarms.isNotEmpty) {
+      if (cloudFarms.isNotEmpty && cloudFarms.first.farmerName.isNotEmpty && cloudFarms.first.farmerName != 'Kisan User') {
         _farms = cloudFarms;
-      } else {
+      } else if (_farms.isNotEmpty && _farms.first.farmerName.isNotEmpty) {
         for (int i = 0; i < _farms.length; i++) {
           await TursoService().upsertFarmCloud(_farms[i], 'farm_${i + 1}');
         }

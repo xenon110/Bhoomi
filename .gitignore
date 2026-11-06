@@ -30,3 +30,6 @@ android/**/GeneratedPluginRegistrant.java
 
 # APK outputs
 *.apk
+
+# Local DB
+bhoomi_offline_db.json

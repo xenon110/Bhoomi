@@ -202,6 +202,30 @@ class TursoService extends ChangeNotifier {
       );
       ''',
       '''
+      CREATE TABLE IF NOT EXISTS bhoomi_crops (
+        id TEXT PRIMARY KEY,
+        farm_id TEXT NOT NULL,
+        name TEXT NOT NULL,
+        variety TEXT,
+        growth_stage TEXT,
+        sowing_date TEXT,
+        expected_harvest_date TEXT,
+        notes TEXT,
+        updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+      );
+      ''',
+      '''
+      CREATE TABLE IF NOT EXISTS bhoomi_fields (
+        id TEXT PRIMARY KEY,
+        farm_id TEXT NOT NULL,
+        name TEXT NOT NULL,
+        area REAL NOT NULL,
+        crop TEXT,
+        sowing_date TEXT,
+        updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+      );
+      ''',
+      '''
       CREATE TABLE IF NOT EXISTS bhoomi_equipment (
         id TEXT PRIMARY KEY,
         name TEXT NOT NULL,
@@ -438,15 +462,15 @@ class TursoService extends ChangeNotifier {
       if (rows.isEmpty) return null;
       final r = rows.first;
       return FarmerProfile(
-        name: r['name']?.toString() ?? 'Kisan User',
-        phone: r['phone']?.toString() ?? '+91 94311 02026',
-        village: r['village']?.toString() ?? 'Chanki',
-        district: r['district']?.toString() ?? 'Palamu',
-        state: r['state']?.toString() ?? 'Jharkhand',
+        name: r['name']?.toString() ?? '',
+        phone: r['phone']?.toString() ?? '',
+        village: r['village']?.toString() ?? '',
+        district: r['district']?.toString() ?? '',
+        state: r['state']?.toString() ?? '',
         language: r['language']?.toString() ?? 'English',
-        soilType: r['soil_type']?.toString() ?? 'Loamy / Sandy Loam',
-        totalArea: (r['total_area'] as num?)?.toDouble() ?? 2.0,
-        kisanId: r['kisan_id']?.toString() ?? 'KCC-JH-PLM-4821',
+        soilType: r['soil_type']?.toString() ?? '',
+        totalArea: (r['total_area'] as num?)?.toDouble() ?? 0.0,
+        kisanId: r['kisan_id']?.toString() ?? '',
         aadhaarLinked: (r['aadhaar_linked'] as num?)?.toInt() == 1,
         weatherAlerts: (r['weather_alerts'] as num?)?.toInt() != 0,
         pestAlerts: (r['pest_alerts'] as num?)?.toInt() != 0,
@@ -526,11 +550,11 @@ class TursoService extends ChangeNotifier {
         }
 
         return Farm(
-          farmerName: r['farmer_name']?.toString() ?? 'Kisan User',
-          village: r['village']?.toString() ?? 'Chanki',
-          district: r['district']?.toString() ?? 'Palamu',
-          state: r['state']?.toString() ?? 'Jharkhand',
-          totalArea: (r['total_area'] as num?)?.toDouble() ?? 2.0,
+          farmerName: r['farmer_name']?.toString() ?? '',
+          village: r['village']?.toString() ?? '',
+          district: r['district']?.toString() ?? '',
+          state: r['state']?.toString() ?? '',
+          totalArea: (r['total_area'] as num?)?.toDouble() ?? 0.0,
           fields: fields,
           crops: crops,
         );
@@ -567,6 +591,61 @@ class TursoService extends ChangeNotifier {
       jsonEncode(farm.fields.map((f) => f.toJson()).toList()),
       jsonEncode(farm.crops.map((c) => c.toJson()).toList()),
     ]);
+
+    // Also store each crop as a first-class SQL row in bhoomi_crops
+    for (int i = 0; i < farm.crops.length; i++) {
+      final c = farm.crops[i];
+      final cropId = '${id}_crop_${i + 1}';
+      const cropSql = '''
+        INSERT INTO bhoomi_crops (
+          id, farm_id, name, variety, growth_stage, sowing_date,
+          expected_harvest_date, notes, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+        ON CONFLICT(id) DO UPDATE SET
+          name=excluded.name,
+          variety=excluded.variety,
+          growth_stage=excluded.growth_stage,
+          sowing_date=excluded.sowing_date,
+          expected_harvest_date=excluded.expected_harvest_date,
+          notes=excluded.notes,
+          updated_at=CURRENT_TIMESTAMP;
+      ''';
+      await executeRaw(cropSql, [
+        cropId,
+        id,
+        c.name,
+        c.variety ?? '',
+        c.growthStage ?? '',
+        c.sowingDate?.toIso8601String() ?? '',
+        c.expectedHarvestDate?.toIso8601String() ?? '',
+        c.notes ?? '',
+      ]);
+    }
+
+    // Also store each field as a first-class SQL row in bhoomi_fields
+    for (int i = 0; i < farm.fields.length; i++) {
+      final f = farm.fields[i];
+      final fieldId = '${id}_field_${i + 1}';
+      const fieldSql = '''
+        INSERT INTO bhoomi_fields (
+          id, farm_id, name, area, crop, sowing_date, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+        ON CONFLICT(id) DO UPDATE SET
+          name=excluded.name,
+          area=excluded.area,
+          crop=excluded.crop,
+          sowing_date=excluded.sowing_date,
+          updated_at=CURRENT_TIMESTAMP;
+      ''';
+      await executeRaw(fieldSql, [
+        fieldId,
+        id,
+        f.name,
+        f.area,
+        f.crop,
+        f.sowingDate?.toIso8601String() ?? '',
+      ]);
+    }
   }
 
   // ==========================================
