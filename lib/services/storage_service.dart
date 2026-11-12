@@ -29,6 +29,7 @@ class StorageService extends ChangeNotifier {
   late List<RentalEquipment> _rentalEquipment;
   late List<FarmlandListing> _farmlandListings;
   List<Map<String, dynamic>> _marketListings = [];
+  List<Map<String, dynamic>> _buyerInquiries = [];
   String? _appliedPlanTitle;
   bool _languageChosenByUser = false;
 
@@ -88,6 +89,12 @@ class StorageService extends ChangeNotifier {
         if (data['marketListings'] != null) {
           _marketListings = (data['marketListings'] as List<dynamic>)
               .map((m) => Map<String, dynamic>.from(m as Map))
+              .toList();
+        }
+
+        if (data['buyerInquiries'] != null) {
+          _buyerInquiries = (data['buyerInquiries'] as List<dynamic>)
+              .map((b) => Map<String, dynamic>.from(b as Map))
               .toList();
         }
 
@@ -435,6 +442,7 @@ class StorageService extends ChangeNotifier {
     ];
 
     _marketListings = [];
+    _buyerInquiries = [];
   }
 
   Future<void> _persistToDisk() async {
@@ -447,6 +455,7 @@ class StorageService extends ChangeNotifier {
         'equipment': _rentalEquipment.map((e) => e.toJson()).toList(),
         'farmland': _farmlandListings.map((l) => l.toJson()).toList(),
         'marketListings': _marketListings,
+        'buyerInquiries': _buyerInquiries,
         'appliedPlan': _appliedPlanTitle,
         'languageChosenByUser': _languageChosenByUser,
         'lastUpdated': DateTime.now().toIso8601String(),
@@ -542,15 +551,47 @@ class StorageService extends ChangeNotifier {
   // Profile operations
   FarmerProfile getProfile() => _profile;
 
+  Future<FarmerProfile?> loginWithPhone(String phone) async {
+    final clean = phone.replaceAll(RegExp(r'\D'), '');
+    // 1. Query Turso Cloud SQLite for existing user account
+    try {
+      final cloudProfile = await TursoService().fetchProfileByPhone(clean);
+      if (cloudProfile != null && cloudProfile.name.isNotEmpty && cloudProfile.name != 'Kisan User') {
+        _profile = cloudProfile;
+        await _persistToDisk();
+        final cloudFarms = await TursoService().fetchFarmsCloud();
+        if (cloudFarms.isNotEmpty) {
+          _farms = cloudFarms;
+          await _persistToDisk();
+        }
+        notifyListeners();
+        return cloudProfile;
+      }
+    } catch (_) {}
+
+    // 2. Fallback to local offline SQLite / JSON cache
+    final localClean = _profile.phone.replaceAll(RegExp(r'\D'), '');
+    if (localClean.isNotEmpty && clean.isNotEmpty && localClean.contains(clean) && _profile.name.isNotEmpty && _profile.name != 'Kisan User') {
+      return _profile;
+    }
+    return null;
+  }
+
   Future<void> updateProfile(FarmerProfile updated) async {
     _profile = updated;
     await _persistToDisk();
-    TursoService().upsertProfileCloud(updated);
+    await TursoService().upsertProfileCloud(updated);
     notifyListeners();
   }
 
   Future<void> saveProfile(FarmerProfile updated) async {
     await updateProfile(updated);
+  }
+
+  Future<void> clearUserData() async {
+    _loadDefaults();
+    await _persistToDisk();
+    notifyListeners();
   }
 
   Future<void> setLanguage(String lang) async {
@@ -654,6 +695,21 @@ class StorageService extends ChangeNotifier {
     notifyListeners();
   }
 
+  // Buyer Inquiries operations
+  List<Map<String, dynamic>> getBuyerInquiries() => List.unmodifiable(_buyerInquiries);
+
+  Future<void> addBuyerInquiry(Map<String, dynamic> item) async {
+    _buyerInquiries.insert(0, item);
+    await _persistToDisk();
+    notifyListeners();
+  }
+
+  Future<void> deleteBuyerInquiry(String id) async {
+    _buyerInquiries.removeWhere((l) => l['id'] == id);
+    await _persistToDisk();
+    notifyListeners();
+  }
+
   // Data maintenance
   Future<void> resetAllData() async {
     _loadDefaults();
@@ -670,6 +726,7 @@ class StorageService extends ChangeNotifier {
       'equipment': _rentalEquipment.map((e) => e.toJson()).toList(),
       'farmland': _farmlandListings.map((l) => l.toJson()).toList(),
       'marketListings': _marketListings,
+      'buyerInquiries': _buyerInquiries,
       'appliedPlan': _appliedPlanTitle,
       'exportedAt': DateTime.now().toIso8601String(),
     };

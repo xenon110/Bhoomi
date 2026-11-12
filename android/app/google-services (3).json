@@ -1,0 +1,39 @@
+{
+  "project_info": {
+    "project_number": "1041595331915",
+    "project_id": "studio-6167596920-dbcef",
+    "storage_bucket": "studio-6167596920-dbcef.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1041595331915:android:1796ea5108cea43a70a4ce",
+        "android_client_info": {
+          "package_name": "com.xenon.kishan"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "1041595331915-0llfgpjeb65mnc0tituccfs30h73t2n7.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAQpV-UJLvdjsXH51lqKeo_jGXVYLNRt5s"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "1041595331915-0llfgpjeb65mnc0tituccfs30h73t2n7.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

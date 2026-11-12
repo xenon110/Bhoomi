@@ -1,12 +1,16 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import '../l10n/app_strings.dart';
+import '../services/agro_intel_service.dart';
+import '../services/gemini_service.dart';
+import '../services/mandi_service.dart';
 import '../services/storage_service.dart';
 import '../services/weather_service.dart';
 import '../theme/app_theme.dart';
 import 'diary/farm_diary_screen.dart';
 import 'planner/farm_planner_screen.dart';
 import 'scan/scan_ask_screen.dart';
+import 'chat/farmer_ai_chat_screen.dart';
 import 'voice/voice_assistant_modal.dart';
 import 'ledger/kisan_ledger_screen.dart';
 import 'market/mandi_arbitrage_screen.dart';
@@ -32,13 +36,18 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   final WeatherService _weatherService = WeatherService();
   final StorageService _storage = StorageService();
+  final MandiService _mandiService = MandiService();
   WeatherForecast? _weather = WeatherForecast.fallback();
   bool _isLoadingWeather = false;
+  FarmIntelSnapshot? _intelSnapshot;
+  GeminiSmartBriefing? _smartBriefing;
+  bool _isLoadingIntel = false;
 
   @override
   void initState() {
     super.initState();
     _fetchWeather();
+    _loadSmartIntel();
     _storage.addListener(_onStorageChanged);
     TursoService().addListener(_onStorageChanged);
   }
@@ -62,6 +71,117 @@ class _HomeScreenState extends State<HomeScreen> {
         _isLoadingWeather = false;
       });
     }
+  }
+
+  Future<void> _loadSmartIntel() async {
+    if (_isLoadingIntel) return;
+    if (mounted) setState(() => _isLoadingIntel = true);
+    try {
+      await _weatherService.syncLocationFromCloud();
+      final snap = await AgroIntelService().buildFarmIntelSnapshot();
+      final topCrop = snap.activeCrops.isNotEmpty ? snap.activeCrops.first : 'Mustard';
+      final bestRate = _mandiService.getBenchmarkPrice(topCrop);
+      final briefing = await GeminiService().generateSmartBriefing(
+        promptContext: snap.promptContext,
+        soilMoistureRoot: snap.weather.soilMoistureRoot,
+        humidity: snap.weather.humidity,
+        rainChance: snap.weather.rainChance,
+        netProfit: snap.netProfit,
+        topCrop: topCrop,
+        bestRate: bestRate,
+        soilPh: snap.soil.ph,
+      );
+      if (mounted) {
+        setState(() {
+          _weather = snap.weather;
+          _intelSnapshot = snap;
+          _smartBriefing = briefing;
+          _isLoadingIntel = false;
+        });
+      }
+    } catch (_) {
+      if (mounted) setState(() => _isLoadingIntel = false);
+    }
+  }
+
+  void _showLocationPinDialog() {
+    final ctrl = TextEditingController();
+    final isHindi = AppLanguage().isHindi;
+    bool resolving = false;
+
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDlgState) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title: Text(
+            isHindi ? '📍 गांव / पिन कोड बदलें' : '📍 Set Village or PIN Code',
+            style: const TextStyle(fontFamily: 'Mukta', fontSize: 18, fontWeight: FontWeight.w700),
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                isHindi
+                    ? '6-अंकों का पिन कोड (जैसे 822101) या शहर/जिले का नाम लिखें। मौसम और सैटेलाइट मिट्टी जांच अपने-आप अपडेट हो जाएगी।'
+                    : 'Enter any 6-digit Indian PIN code (e.g. 822101) or village/district name to load hyper-local weather & soil pH.',
+                style: const TextStyle(fontFamily: 'Mukta', fontSize: 13, color: AppColors.textMuted),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: ctrl,
+                decoration: InputDecoration(
+                  hintText: isHindi ? 'पिन कोड या शहर (उदा. 822101, Varanasi)' : 'PIN code or District (e.g. 822101)',
+                  filled: true,
+                  fillColor: AppColors.creamBg,
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: Text(isHindi ? 'रद्द करें' : 'Cancel'),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: AppColors.primaryGreen),
+              onPressed: resolving
+                  ? null
+                  : () async {
+                      final q = ctrl.text.trim();
+                      if (q.isEmpty) return;
+                      setDlgState(() => resolving = true);
+                      final found = await _weatherService.resolveLocationByPinOrName(q);
+                      if (ctx.mounted) Navigator.pop(ctx);
+                      if (found != null) {
+                        await _loadSmartIntel();
+                        if (mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text(isHindi ? '✓ स्थान अपडेट: $found' : '✓ Location updated: $found'),
+                              backgroundColor: AppColors.primaryGreen,
+                            ),
+                          );
+                        }
+                      } else if (mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text(isHindi ? 'स्थान नहीं मिला, पुनः प्रयास करें' : 'Location not found, try a district or PIN code'),
+                            backgroundColor: const Color(0xFFD97706),
+                          ),
+                        );
+                      }
+                    },
+              child: resolving
+                  ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                  : Text(isHindi ? 'अपडेट करें' : 'Update', style: const TextStyle(color: Colors.white)),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   String _getTimeGreeting(bool isHindi) {
@@ -91,10 +211,11 @@ class _HomeScreenState extends State<HomeScreen> {
             borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
           ),
           padding: const EdgeInsets.symmetric(horizontal: 22.0, vertical: 20.0),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
               Center(
                 child: Container(
                   width: 42,
@@ -136,21 +257,50 @@ class _HomeScreenState extends State<HomeScreen> {
                 ],
               ),
               const SizedBox(height: 4),
-              Text(
-                'Source: ${w.source}',
-                style: const TextStyle(fontSize: 12, color: Color(0xFF55655A)),
-              ),
-              const SizedBox(height: 16),
-              const Divider(),
-              const SizedBox(height: 16),
-
-              // Metrics Row
               Row(
-                mainAxisAlignment: MainAxisAlignment.spaceAround,
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  _buildMetricTile(lang.isHindi ? 'नमी' : 'Humidity', '${w.humidity}%', Icons.water_drop_rounded),
-                  _buildMetricTile(lang.isHindi ? 'बारिश' : 'Rain Chance', '${w.rainChance}%', Icons.umbrella_rounded),
-                  _buildMetricTile(lang.isHindi ? 'हवा' : 'Wind', '${w.windSpeed} km/h', Icons.air_rounded),
+                  Expanded(
+                    child: Text(
+                      'Source: ${w.source}',
+                      style: const TextStyle(fontSize: 12, color: Color(0xFF55655A)),
+                    ),
+                  ),
+                  TextButton.icon(
+                    onPressed: () {
+                      Navigator.pop(ctx);
+                      _showLocationPinDialog();
+                    },
+                    icon: const Icon(Icons.edit_location_alt_rounded, size: 16, color: AppColors.primaryGreen),
+                    label: Text(
+                      lang.isHindi ? 'पिन/स्थान बदलें' : 'Change PIN/Area',
+                      style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.primaryGreen),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              const Divider(),
+              const SizedBox(height: 12),
+
+              // Uniform 3x2 Telemetry Bento Grid (Weather + Satellite Soil)
+              Row(
+                children: [
+                  Expanded(child: _buildBentoMetricBox(lang.isHindi ? 'नमी' : 'Humidity', '${w.humidity}%', Icons.water_drop_rounded, const Color(0xFFE0F2FE), const Color(0xFF0369A1))),
+                  const SizedBox(width: 8),
+                  Expanded(child: _buildBentoMetricBox(lang.isHindi ? 'बारिश' : 'Rain', '${w.rainChance}%', Icons.umbrella_rounded, const Color(0xFFE0F2FE), const Color(0xFF0369A1))),
+                  const SizedBox(width: 8),
+                  Expanded(child: _buildBentoMetricBox(lang.isHindi ? 'हवा' : 'Wind', '${w.windSpeed.round()} km/h', Icons.air_rounded, const Color(0xFFF6F2E9), AppColors.textDark)),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  Expanded(child: _buildBentoMetricBox(lang.isHindi ? 'जड़ नमी' : 'Soil Moist', '${w.soilMoistureRoot}%', Icons.grass_rounded, AppColors.mintTint, AppColors.primaryGreen)),
+                  const SizedBox(width: 8),
+                  Expanded(child: _buildBentoMetricBox(lang.isHindi ? 'मिट्टी ताप' : 'Soil Temp', '${w.soilTemperature}°C', Icons.thermostat_rounded, const Color(0xFFFEF3C7), const Color(0xFFB45309))),
+                  const SizedBox(width: 8),
+                  Expanded(child: _buildBentoMetricBox(lang.isHindi ? 'वाष्पन' : 'ET₀ Loss', '${w.evapotranspiration} mm', Icons.wb_sunny_outlined, const Color(0xFFFEF3C7), const Color(0xFFB45309))),
                 ],
               ),
 
@@ -184,13 +334,24 @@ class _HomeScreenState extends State<HomeScreen> {
                     ),
                     const SizedBox(height: 6),
                     Text(
-                      w.agriculturalAdvice,
+                      _smartBriefing?.getIrrigationAdvice(lang.isHindi) ?? w.agriculturalAdvice,
                       style: const TextStyle(
                         fontSize: 12.5,
                         color: Color(0xFF1B2A21),
                         height: 1.4,
                       ),
                     ),
+                    if (_intelSnapshot != null) ...[
+                      const SizedBox(height: 6),
+                      Text(
+                        '${lang.isHindi ? "मिट्टी" : "Soil"}: ${_intelSnapshot!.soil.getTexture(lang.isHindi)} · pH ${_intelSnapshot!.soil.ph}',
+                        style: const TextStyle(
+                          fontSize: 11.5,
+                          fontWeight: FontWeight.w500,
+                          color: Color(0xFF3A6B4A),
+                        ),
+                      ),
+                    ],
                   ],
                 ),
               ),
@@ -254,41 +415,14 @@ class _HomeScreenState extends State<HomeScreen> {
               }),
               const SizedBox(height: 10),
             ],
+            ),
           ),
         );
       },
     );
   }
 
-  Widget _buildMetricTile(String label, String value, IconData icon) {
-    return Column(
-      children: [
-        Container(
-          padding: const EdgeInsets.all(10),
-          decoration: const BoxDecoration(
-            color: Color(0xFFE2EFDF),
-            shape: BoxShape.circle,
-          ),
-          child: Icon(icon, color: const Color(0xFF1E4D2B), size: 20),
-        ),
-        const SizedBox(height: 6),
-        Text(
-          value,
-          style: const TextStyle(
-            fontSize: 15,
-            fontWeight: FontWeight.w600,
-            color: Color(0xFF1B2A21),
-          ),
-        ),
-        Text(
-          label,
-          style: const TextStyle(fontSize: 11, color: Color(0xFF55655A)),
-        ),
-      ],
-    );
-  }
-
-    Widget _buildSpecialToolPill({
+  Widget _buildSpecialToolPill({
     required String title,
     required String sub,
     required IconData icon,
@@ -302,13 +436,13 @@ class _HomeScreenState extends State<HomeScreen> {
         constraints: const BoxConstraints(minWidth: 120),
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: Color.lerp(Colors.white, bgColor, 0.35),
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: const Color(0xFFE6E0D2)),
-          boxShadow: const [
+          border: Border.all(color: Color.lerp(const Color(0xFFE6E0D2), bgColor, 0.45) ?? const Color(0xFFE6E0D2)),
+          boxShadow: [
             BoxShadow(
-              color: Color(0xFFE9E2D1),
-              offset: Offset(0, 2),
+              color: Color.lerp(const Color(0xFFE9E2D1), bgColor, 0.35) ?? const Color(0xFFE9E2D1),
+              offset: const Offset(0, 2),
               blurRadius: 0,
             ),
           ],
@@ -367,127 +501,173 @@ class _HomeScreenState extends State<HomeScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // 1. TOP HEADER: Logo + Brand Name + Language Switcher + Voice Assistant
+          // 1. TOP HEADER: Brand + Kisan AI Talk + Language + Mic
           Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               // Logo + Brand Name
-              Row(
-                children: [
-                  Container(
-                    width: 44,
-                    height: 44,
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF1E4D2B),
-                      borderRadius: BorderRadius.circular(15),
-                      boxShadow: const [
-                        BoxShadow(
-                          color: Color(0xFF123320),
-                          offset: Offset(0, 3),
-                        ),
-                      ],
-                    ),
-                    alignment: Alignment.center,
-                    child: SizedBox(
-                      width: 26,
-                      height: 26,
-                      child: CustomPaint(
-                        painter: _LogoLeafPainter(),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        lang.t('app_name'),
-                        style: const TextStyle(
-                          fontSize: 22,
-                          fontWeight: FontWeight.w600,
-                          color: Color(0xFF1B2A21),
-                          height: 1.1,
-                        ),
-                      ),
-                      Text(
-                        lang.t('app_tagline'),
-                        style: const TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w400,
-                          color: Color(0xFF55655A),
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-
-              // Language Button & Voice Mic Button
-              Row(
-                children: [
-                  // Language Button
-                  InkWell(
-                    onTap: () {
-                      final nextLang = isHindi ? 'English' : 'हिन्दी';
-                      lang.setLanguage(nextLang);
-                    },
-                    borderRadius: BorderRadius.circular(22),
-                    child: Container(
-                      height: 44,
-                      padding: const EdgeInsets.symmetric(horizontal: 14),
+              Expanded(
+                child: Row(
+                  children: [
+                    Container(
+                      width: 40,
+                      height: 40,
                       decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(22),
-                        border: Border.all(color: const Color(0xFFDDD6C4), width: 1),
-                      ),
-                      child: Row(
-                        children: [
-                          const Icon(
-                            Icons.language_rounded,
-                            size: 18,
-                            color: Color(0xFF1B2A21),
+                        color: const Color(0xFF1E4D2B),
+                        borderRadius: BorderRadius.circular(13),
+                        boxShadow: const [
+                          BoxShadow(
+                            color: Color(0xFF123320),
+                            offset: Offset(0, 2),
                           ),
-                          const SizedBox(width: 6),
+                        ],
+                      ),
+                      alignment: Alignment.center,
+                      child: SizedBox(
+                        width: 24,
+                        height: 24,
+                        child: CustomPaint(
+                          painter: _LogoLeafPainter(),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 9),
+                    Flexible(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
                           Text(
-                            isHindi ? 'हिन्दी' : 'EN',
+                            lang.t('app_name'),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
                             style: const TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w400,
+                              fontSize: 21,
+                              fontWeight: FontWeight.w600,
                               color: Color(0xFF1B2A21),
+                              height: 1.1,
+                            ),
+                          ),
+                          Text(
+                            lang.t('app_tagline'),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w400,
+                              color: Color(0xFF55655A),
                             ),
                           ),
                         ],
                       ),
                     ),
-                  ),
-                  const SizedBox(width: 8),
+                  ],
+                ),
+              ),
 
-                  // Mic Button
-                  InkWell(
-                    onTap: () => VoiceAssistantModal.show(context),
-                    borderRadius: BorderRadius.circular(22),
-                    child: Container(
-                      width: 44,
-                      height: 44,
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF1E4D2B),
-                        shape: BoxShape.circle,
-                        boxShadow: const [
-                          BoxShadow(
-                            color: Color(0xFF123320),
-                            offset: Offset(0, 3),
-                          ),
-                        ],
+              const SizedBox(width: 6),
+
+              // Kisan AI Talk Button (Primary Top Action)
+              InkWell(
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const FarmerAiChatScreen()),
+                  );
+                },
+                borderRadius: BorderRadius.circular(20),
+                child: Container(
+                  height: 38,
+                  padding: const EdgeInsets.symmetric(horizontal: 11),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF1E4D2B),
+                    borderRadius: BorderRadius.circular(20),
+                    boxShadow: const [
+                      BoxShadow(
+                        color: Color(0xFF123320),
+                        offset: Offset(0, 2),
                       ),
-                      alignment: Alignment.center,
-                      child: const Icon(
-                        Icons.mic_none_rounded,
-                        color: Colors.white,
-                        size: 22,
-                      ),
-                    ),
+                    ],
                   ),
-                ],
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(
+                        Icons.record_voice_over_rounded,
+                        size: 16,
+                        color: Color(0xFFF2B134),
+                      ),
+                      const SizedBox(width: 5),
+                      Text(
+                        isHindi ? 'किसान AI' : 'Kisan AI',
+                        style: const TextStyle(
+                          fontFamily: 'Mukta',
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(width: 6),
+
+              // Language Button
+              InkWell(
+                onTap: () {
+                  final nextLang = isHindi ? 'English' : 'हिन्दी';
+                  lang.setLanguage(nextLang);
+                },
+                borderRadius: BorderRadius.circular(19),
+                child: Container(
+                  height: 38,
+                  padding: const EdgeInsets.symmetric(horizontal: 10),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(19),
+                    border: Border.all(color: const Color(0xFFDDD6C4), width: 1),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(
+                        Icons.language_rounded,
+                        size: 16,
+                        color: Color(0xFF1B2A21),
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        isHindi ? 'हिन्दी' : 'EN',
+                        style: const TextStyle(
+                          fontSize: 12.5,
+                          fontWeight: FontWeight.w500,
+                          color: Color(0xFF1B2A21),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(width: 6),
+
+              // Voice Mic Button
+              InkWell(
+                onTap: () => VoiceAssistantModal.show(context),
+                borderRadius: BorderRadius.circular(19),
+                child: Container(
+                  width: 38,
+                  height: 38,
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    shape: BoxShape.circle,
+                    border: Border.all(color: const Color(0xFFDDD6C4), width: 1),
+                  ),
+                  alignment: Alignment.center,
+                  child: const Icon(
+                    Icons.mic_none_rounded,
+                    color: Color(0xFF1E4D2B),
+                    size: 19,
+                  ),
+                ),
               ),
             ],
           ),
@@ -726,9 +906,11 @@ class _HomeScreenState extends State<HomeScreen> {
                                           ),
                                           const SizedBox(width: 5),
                                           Text(
-                                            profile.district.isNotEmpty
-                                                ? profile.district
-                                                : (isHindi ? 'स्थानीय प्रक्षेत्र' : 'Local Farm'),
+                                            _weatherService.activeLocationName.isNotEmpty
+                                                ? _weatherService.activeLocationName.split(',').first
+                                                : (profile.district.isNotEmpty
+                                                    ? profile.district
+                                                    : (isHindi ? 'स्थानीय प्रक्षेत्र' : 'Local Farm')),
                                             style: const TextStyle(
                                               fontSize: 12.5,
                                               fontWeight: FontWeight.w400,
@@ -749,9 +931,9 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
           ),
 
-          const SizedBox(height: 14),
+          const SizedBox(height: 16),
 
-          // 3. SCAN & ASK BANNER (Harvest Gold, Box Shadow 0 4px 0 #C98F1C)
+          // 3. CLASSIC HARVEST GOLD SCAN & ASK BANNER
           InkWell(
             onTap: () {
               Navigator.push(
@@ -762,7 +944,7 @@ class _HomeScreenState extends State<HomeScreen> {
             borderRadius: BorderRadius.circular(24),
             child: Container(
               width: double.infinity,
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
               decoration: BoxDecoration(
                 color: const Color(0xFFF2B134),
                 borderRadius: BorderRadius.circular(24),
@@ -773,150 +955,108 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                 ],
               ),
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(24),
-                child: Stack(
-                  clipBehavior: Clip.none,
-                  children: [
-                    // Decorative Circle
-                    Positioned(
-                      right: -20,
-                      top: -30,
-                      width: 110,
-                      height: 110,
-                      child: Container(
-                        decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.22),
-                          shape: BoxShape.circle,
-                        ),
-                      ),
+              child: Row(
+                children: [
+                  Container(
+                    width: 56,
+                    height: 56,
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(17),
                     ),
-
-                    Row(
+                    alignment: Alignment.center,
+                    child: SizedBox(
+                      width: 36,
+                      height: 36,
+                      child: CustomPaint(painter: _ScanViewfinderLeafPainter()),
+                    ),
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        // White Box with Viewfinder Leaf
-                        Container(
-                          width: 60,
-                          height: 60,
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.circular(18),
-                          ),
-                          alignment: Alignment.center,
-                          child: SizedBox(
-                            width: 40,
-                            height: 40,
-                            child: CustomPaint(
-                              painter: _ScanViewfinderLeafPainter(),
-                            ),
+                        Text(
+                          lang.t('scan_ask_title'),
+                          style: const TextStyle(
+                            fontSize: 19,
+                            fontWeight: FontWeight.w600,
+                            color: Color(0xFF2A1B00),
+                            height: 1.15,
                           ),
                         ),
-                        const SizedBox(width: 14),
-
-                        // Text
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                lang.t('scan_ask_title'),
-                                style: const TextStyle(
-                                  fontSize: 20,
-                                  fontWeight: FontWeight.w600,
-                                  color: Color(0xFF2A1B00),
-                                ),
-                              ),
-                              Text(
-                                lang.t('scan_ask_desc'),
-                                style: const TextStyle(
-                                  fontSize: 13.5,
-                                  fontWeight: FontWeight.w400,
-                                  color: Color(0xFF2A1B00),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-
-                        // Scan Pill Button
-                        Container(
-                          height: 40,
-                          padding: const EdgeInsets.symmetric(horizontal: 14),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFF1E4D2B),
-                            borderRadius: BorderRadius.circular(22),
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Text(
-                                lang.t('scan_btn'),
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 15,
-                                  fontWeight: FontWeight.w500,
-                                ),
-                              ),
-                              const SizedBox(width: 4),
-                              const Icon(
-                                Icons.arrow_forward_rounded,
-                                color: Colors.white,
-                                size: 16,
-                              ),
-                            ],
+                        const SizedBox(height: 2),
+                        Text(
+                          lang.t('scan_ask_desc'),
+                          style: const TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w400,
+                            color: Color(0xFF3E2900),
                           ),
                         ),
                       ],
                     ),
-                  ],
-                ),
+                  ),
+                  const SizedBox(width: 8),
+                  Container(
+                    height: 38,
+                    padding: const EdgeInsets.symmetric(horizontal: 14),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF1E4D2B),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          lang.t('scan_btn'),
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 14,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                        const SizedBox(width: 4),
+                        const Icon(
+                          Icons.arrow_forward_rounded,
+                          color: Colors.white,
+                          size: 16,
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
               ),
             ),
           ),
 
-          const SizedBox(height: 18),
+          const SizedBox(height: 20),
 
-          // 4. SECTION TITLE: Essential Farm Tools (No duplicate of Bottom Nav)
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                isHindi ? 'ज़रूरी किसान उपकरण' : 'Essential Farm Tools',
-                style: const TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w600,
-                  color: Color(0xFF1B2A21),
-                ),
-              ),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFE2EFDF),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Text(
-                  isHindi ? '4 उपकरण' : '4 Tools',
-                  style: const TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w500,
-                    color: Color(0xFF1E4D2B),
-                  ),
-                ),
-              ),
-            ],
+          // 4. SECTION TITLE: Essential Farm Tools
+          Text(
+            isHindi ? 'ज़रूरी किसान उपकरण' : 'Essential Farm Tools',
+            style: const TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.w600,
+              color: Color(0xFF1B2A21),
+            ),
           ),
-          const SizedBox(height: 10),
+          const SizedBox(height: 12),
 
           // 2x2 ACTION GRID (Unique high-value farmer tools)
           Row(
             children: [
-              // Tile 1: Rent Farm Equipment (कृषि यंत्र किराया)
+              // Tile 1: Rent Farm Equipment (Sage Green)
               Expanded(
                 child: _buildActionTile(
-                  bColor: const Color(0xFFE2EFDF),
-                  iconBg: const Color(0xFFCFE5CA),
+                  cardBg: const Color(0xFFEEF7EC),
+                  borderColor: const Color(0xFFC8E2C2),
+                  shadowColor: const Color(0xFFD2E8CD),
+                  bColor: const Color(0xFFD9EED4),
+                  iconBg: const Color(0xFFC5E4BE),
                   icon: Icons.agriculture_rounded,
                   iconColor: const Color(0xFF1E4D2B),
+                  chevronColor: const Color(0xFF1E4D2B),
                   title: isHindi ? 'यंत्र किराया' : 'Rent Equipment',
                   subtitle: isHindi ? 'ट्रैक्टर, हार्वेस्टर व ड्रोन' : 'Tractors & Tools',
                   onTap: () {
@@ -929,12 +1069,16 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
               const SizedBox(width: 12),
 
-              // Tile 2: Design My Land (खेत डिजाइन)
+              // Tile 2: Design My Land (Irrigation Sky Blue)
               Expanded(
                 child: _buildActionTile(
-                  bColor: const Color(0xFFDDEBF3),
-                  iconBg: const Color(0xFFC9E1EE),
+                  cardBg: const Color(0xFFECF5FA),
+                  borderColor: const Color(0xFFC4DFEE),
+                  shadowColor: const Color(0xFFCFE6F3),
+                  bColor: const Color(0xFFD6EAF5),
+                  iconBg: const Color(0xFFBFE0F1),
                   iconPainter: _PlannerParcelsPainter(),
+                  chevronColor: const Color(0xFF18566F),
                   title: isHindi ? 'खेत डिजाइन' : 'Design My Land',
                   subtitle: isHindi ? 'दूरी व बुवाई नक्शा' : 'Spacing & Layout',
                   onTap: () {
@@ -951,13 +1095,17 @@ class _HomeScreenState extends State<HomeScreen> {
 
           Row(
             children: [
-              // Tile 3: Kisan Ledger / Bahi-Khata (किसान बही-खाता)
+              // Tile 3: Kisan Ledger / Bahi-Khata (Harvest Honey Gold)
               Expanded(
                 child: _buildActionTile(
-                  bColor: const Color(0xFFFCEFD0),
-                  iconBg: const Color(0xFFFBE3A6),
+                  cardBg: const Color(0xFFFEF7E4),
+                  borderColor: const Color(0xFFF0D9A3),
+                  shadowColor: const Color(0xFFF3E2B7),
+                  bColor: const Color(0xFFFBECC6),
+                  iconBg: const Color(0xFFF9DF9E),
                   icon: Icons.account_balance_wallet_outlined,
                   iconColor: const Color(0xFF8A5600),
+                  chevronColor: const Color(0xFF8A5600),
                   title: isHindi ? 'किसान बही-खाता' : 'Kisan Ledger',
                   subtitle: isHindi ? 'आय-व्यय व मुनाफा' : 'Income & Cost P&L',
                   onTap: () {
@@ -970,13 +1118,17 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
               const SizedBox(width: 12),
 
-              // Tile 4: Sarkari Yojana (सरकारी योजनाएं)
+              // Tile 4: Sarkari Yojana (Warm Terracotta Peach)
               Expanded(
                 child: _buildActionTile(
-                  bColor: const Color(0xFFF6E0D6),
-                  iconBg: const Color(0xFFF3D3C4),
+                  cardBg: const Color(0xFFFCF1EC),
+                  borderColor: const Color(0xFFEDD0C2),
+                  shadowColor: const Color(0xFFF1D9CE),
+                  bColor: const Color(0xFFF6DFD4),
+                  iconBg: const Color(0xFFF3CEC0),
                   icon: Icons.account_balance_outlined,
-                  iconColor: const Color(0xFFC98F1C),
+                  iconColor: const Color(0xFF9A3E1E),
+                  chevronColor: const Color(0xFF9A3E1E),
                   title: isHindi ? 'सरकारी योजनाएं' : 'Sarkari Yojana',
                   subtitle: isHindi ? 'सब्सिडी व पीएम किसान' : 'Subsidies & Grants',
                   onTap: () {
@@ -990,329 +1142,94 @@ class _HomeScreenState extends State<HomeScreen> {
             ],
           ),
 
-          const SizedBox(height: 14),
+          const SizedBox(height: 16),
 
-          // 5. BUY & SELL AGRICULTURAL LAND (Direct Farmer-to-Farmer Marketplace)
-          Container(
-            padding: const EdgeInsets.all(14),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              border: Border.all(color: const Color(0xFFE6E0D2), width: 1),
-              borderRadius: BorderRadius.circular(22),
-              boxShadow: const [
-                BoxShadow(
-                  color: Color(0xFFE9E2D1),
-                  offset: Offset(0, 3),
-                ),
-              ],
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Row(
+          // 5. BUY & SELL AGRICULTURAL LAND (Compact 1-Tap Marketplace Card)
+          InkWell(
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const LandMarketplaceScreen()),
+              );
+            },
+            borderRadius: BorderRadius.circular(22),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+              decoration: AppStyles.cardBox,
+              child: Row(
+                children: [
+                  Container(
+                    width: 42,
+                    height: 42,
+                    decoration: BoxDecoration(
+                      color: AppColors.mintTint,
+                      borderRadius: BorderRadius.circular(13),
+                    ),
+                    alignment: Alignment.center,
+                    child: const Icon(Icons.terrain_rounded, color: AppColors.primaryGreen, size: 22),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Container(
-                          width: 36,
-                          height: 36,
-                          decoration: BoxDecoration(
-                            color: const Color(0xFFE2EFDF),
-                            borderRadius: BorderRadius.circular(10),
+                        Text(
+                          isHindi ? 'कृषि जमीन क्रय-विक्रय' : 'Farmland Marketplace',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            fontFamily: 'Mukta',
+                            fontSize: 15.5,
+                            fontWeight: FontWeight.w600,
+                            color: AppColors.textDark,
                           ),
-                          alignment: Alignment.center,
-                          child: const Icon(Icons.terrain_rounded, color: Color(0xFF1E4D2B), size: 20),
                         ),
-                        const SizedBox(width: 10),
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              isHindi ? 'जमीन क्रय-विक्रय बाज़ार' : 'FARMLAND MARKET',
-                              style: const TextStyle(
-                                fontFamily: 'Mukta',
-                                fontSize: 11,
-                                fontWeight: FontWeight.w600,
-                                color: Color(0xFF1E4D2B),
-                                letterSpacing: 0.5,
-                              ),
-                            ),
-                            Text(
-                              isHindi ? 'कृषि जमीन खरीदें या बेचें' : 'Sell or Buy Farmland',
-                              style: const TextStyle(
-                                fontFamily: 'Mukta',
-                                fontSize: 15,
-                                fontWeight: FontWeight.w600,
-                                color: Color(0xFF1B2A21),
-                              ),
-                            ),
-                          ],
+                        Text(
+                          isHindi ? '0% दलाली · सीधे किसानों से खरीदें/बेचें' : '0% Brokerage · Verified village plots',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            fontFamily: 'Mukta',
+                            fontSize: 12,
+                            fontWeight: FontWeight.w400,
+                            color: AppColors.textMuted,
+                          ),
                         ),
                       ],
                     ),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFF2B134).withOpacity(0.2),
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: const Text(
-                        '0% Brokerage',
-                        style: TextStyle(
-                          fontFamily: 'Mukta',
-                          fontSize: 10.5,
-                          fontWeight: FontWeight.w600,
-                          color: Color(0xFF8A5600),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 10),
-                Text(
-                  isHindi
-                      ? 'अपने गांव व जिले में उपजाऊ बोरवेल जमीन देखें या अपनी जमीन सीधे किसानों को बेचें।'
-                      : 'Verified irrigated plots near your village. Direct deal with farmers, zero middleman commission.',
-                  style: const TextStyle(
-                    fontFamily: 'Mukta',
-                    fontSize: 12,
-                    fontWeight: FontWeight.w400,
-                    color: Color(0xFF55655A),
-                    height: 1.3,
                   ),
-                ),
-                const SizedBox(height: 12),
-                Row(
-                  children: [
-                    Expanded(
-                      child: GestureDetector(
-                        onTap: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(builder: (_) => const LandMarketplaceScreen()),
-                          );
-                        },
-                        child: Container(
-                          height: 38,
-                          decoration: BoxDecoration(
-                            color: const Color(0xFF1E4D2B),
-                            borderRadius: BorderRadius.circular(14),
-                          ),
-                          alignment: Alignment.center,
-                          child: Text(
-                            isHindi ? 'जमीन देखें →' : 'Browse Farmland →',
-                            style: const TextStyle(
-                              fontFamily: 'Mukta',
-                              fontSize: 12.5,
-                              fontWeight: FontWeight.w600,
-                              color: Colors.white,
-                            ),
-                          ),
-                        ),
+                  const SizedBox(width: 8),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: AppColors.primaryGreen,
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    child: Text(
+                      isHindi ? 'देखें' : 'Open',
+                      style: const TextStyle(
+                        fontFamily: 'Mukta',
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.white,
                       ),
                     ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: GestureDetector(
-                        onTap: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(builder: (_) => const LandMarketplaceScreen()),
-                          );
-                        },
-                        child: Container(
-                          height: 38,
-                          decoration: BoxDecoration(
-                            color: const Color(0xFFF6F2E9),
-                            border: Border.all(color: const Color(0xFFDDD6C4)),
-                            borderRadius: BorderRadius.circular(14),
-                          ),
-                          alignment: Alignment.center,
-                          child: Text(
-                            isHindi ? '+ अपनी जमीन बेचें' : '+ Post Land to Sell',
-                            style: const TextStyle(
-                              fontFamily: 'Mukta',
-                              fontSize: 12.5,
-                              fontWeight: FontWeight.w600,
-                              color: Color(0xFF1B2A21),
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ],
+                  ),
+                ],
+              ),
             ),
           ),
 
           const SizedBox(height: 20),
 
-          // 6. REAL ACTIVE CROPS IN FIELD (REAL PHOTOGRAPHY & FARMING FEEL)
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                isHindi ? 'खेत की फसलें (Active Crops)' : 'Your Active Crops',
-                style: const TextStyle(
-                  fontSize: 17,
-                  fontWeight: FontWeight.w600,
-                  color: Color(0xFF1B2A21),
-                ),
-              ),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFE2EFDF),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Text(
-                  isHindi ? '3 भूखंड सक्रिय' : '3 Plots Active',
-                  style: const TextStyle(
-                    fontSize: 11.5,
-                    fontWeight: FontWeight.w500,
-                    color: Color(0xFF1E4D2B),
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
-
-          // Horizontal Carousel of Real Crops
-          () {
-            final farm = _storage.getPrimaryFarm();
-            final crops = farm.crops;
-            if (crops.isEmpty) {
-              return InkWell(
-                onTap: () => widget.onNavigateTab?.call(1),
-                borderRadius: BorderRadius.circular(20),
-                child: Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(color: const Color(0xFFE6E0D2)),
-                    boxShadow: const [BoxShadow(color: Color(0xFFE9E2D1), offset: Offset(0, 3))],
-                  ),
-                  child: Row(
-                    children: [
-                      Container(
-                        width: 48,
-                        height: 48,
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFE2EFDF),
-                          borderRadius: BorderRadius.circular(16),
-                        ),
-                        alignment: Alignment.center,
-                        child: const Icon(Icons.spa_rounded, color: Color(0xFF1E4D2B), size: 24),
-                      ),
-                      const SizedBox(width: 14),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              isHindi ? 'अपनी फसलें जोड़ें' : 'Add Your Farm Crops',
-                              style: const TextStyle(
-                                fontFamily: 'Mukta',
-                                fontSize: 16,
-                                fontWeight: FontWeight.w600,
-                                color: Color(0xFF1B2A21),
-                              ),
-                            ),
-                            const SizedBox(height: 2),
-                            Text(
-                              isHindi
-                                  ? 'खेत में उगाई जा रही फसलों का विवरण दर्ज करें और मौसम सलाह पाएं।'
-                                  : 'Track your crops, sowing dates, and tailored advisory.',
-                              style: const TextStyle(
-                                fontFamily: 'Mukta',
-                                fontSize: 12.5,
-                                fontWeight: FontWeight.w400,
-                                color: Color(0xFF55655A),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      const Icon(Icons.arrow_forward_ios_rounded, size: 16, color: Color(0xFF1E4D2B)),
-                    ],
-                  ),
-                ),
-              );
-            }
-
-            return SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              physics: const BouncingScrollPhysics(),
-              child: Row(
-                children: crops.map((crop) {
-                  final cNameLower = crop.name.toLowerCase();
-                  String img = 'assets/images/farmer_field.jpg';
-                  if (cNameLower.contains('mustard') || cNameLower.contains('sarson')) {
-                    img = 'assets/images/mustard_crop.jpg';
-                  } else if (cNameLower.contains('wheat') || cNameLower.contains('gehu')) {
-                    img = 'assets/images/wheat_crop.jpg';
-                  }
-                  final plotText = farm.totalArea > 0
-                      ? '${farm.totalArea} Acres · ${farm.village.isNotEmpty ? farm.village : (isHindi ? "खेत" : "Farmland")}'
-                      : (farm.village.isNotEmpty ? farm.village : (isHindi ? "सक्रिय खेत" : "Active Plot"));
-                  final varietyText = (crop.variety != null && crop.variety!.trim().isNotEmpty)
-                      ? '${isHindi ? "किस्म:" : "Variety:"} ${crop.variety!}'
-                      : ((crop.notes != null && crop.notes!.trim().isNotEmpty)
-                          ? crop.notes!
-                          : (isHindi ? 'सक्रिय खेती' : 'Active Growth'));
-                  final stageText = (crop.growthStage != null && crop.growthStage!.trim().isNotEmpty)
-                      ? crop.growthStage!
-                      : (isHindi ? 'अनुकूल स्थिति' : 'Healthy');
-
-                  return _buildCropCard(
-                    imagePath: img,
-                    cropName: crop.name,
-                    variety: varietyText,
-                    stage: stageText,
-                    plotInfo: plotText,
-                    badgeBg: const Color(0xFFE2EFDF),
-                    badgeTextColor: const Color(0xFF1E4D2B),
-                  );
-                }).toList(),
-              ),
-            );
-          }(),
-
-          const SizedBox(height: 20),
-
-          // 7. FARMER SMART SERVICES & HUBS
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                isHindi ? 'विशेष किसान सेवाएँ (Smart Tools)' : 'Farmer Smart Services',
-                style: const TextStyle(
-                  fontSize: 17,
-                  fontWeight: FontWeight.w600,
-                  color: Color(0xFF1B2A21),
-                ),
-              ),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFF2B134).withOpacity(0.2),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: const Text(
-                  '5 Services',
-                  style: TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w500,
-                    color: Color(0xFF8A5600),
-                  ),
-                ),
-              ),
-            ],
+          // 6. VILLAGE SERVICES & HUBS
+          Text(
+            isHindi ? 'गाँव की अन्य सेवाएँ' : 'Village Services',
+            style: const TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.w600,
+              color: Color(0xFF1B2A21),
+            ),
           ),
           const SizedBox(height: 10),
 
@@ -1374,156 +1291,34 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  // Real Crop Card with photo, stage tag, and plot info
-  Widget _buildCropCard({
-    required String imagePath,
-    required String cropName,
-    required String variety,
-    required String stage,
-    required String plotInfo,
-    required Color badgeBg,
-    required Color badgeTextColor,
-  }) {
-    return Container(
-      width: 220,
-      margin: const EdgeInsets.only(right: 12),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: const Color(0xFFE6E0D2)),
-        boxShadow: const [
-          BoxShadow(
-            color: Color(0xFFE9E2D1),
-            offset: Offset(0, 3),
-            blurRadius: 0,
-          ),
-        ],
-      ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Real Image
-            Stack(
-              children: [
-                SizedBox(
-                  height: 115,
-                  width: 220,
-                  child: SafeLocalImage(
-                    imagePath: imagePath,
-                    width: 220,
-                    height: 115,
-                    fit: BoxFit.cover,
-                    fallback: Container(
-                      height: 115,
-                      width: 220,
-                      color: badgeBg,
-                      child: Center(
-                        child: Icon(Icons.agriculture_rounded, color: badgeTextColor, size: 36),
-                      ),
-                    ),
-                  ),
-                ),
-                Positioned(
-                  top: 8,
-                  right: 8,
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                    decoration: BoxDecoration(
-                      color: badgeBg,
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: Text(
-                      stage,
-                      style: TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w500,
-                        color: badgeTextColor,
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            Padding(
-              padding: const EdgeInsets.all(12),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    cropName,
-                    style: const TextStyle(
-                      fontSize: 15.5,
-                      fontWeight: FontWeight.w600,
-                      color: Color(0xFF1B2A21),
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    variety,
-                    style: const TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w400,
-                      color: Color(0xFF55655A),
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  const SizedBox(height: 6),
-                  Row(
-                    children: [
-                      const Icon(Icons.location_on_outlined, size: 14, color: Color(0xFF1E4D2B)),
-                      const SizedBox(width: 4),
-                      Expanded(
-                        child: Text(
-                          plotInfo,
-                          style: const TextStyle(
-                            fontSize: 11.5,
-                            fontWeight: FontWeight.w400,
-                            color: Color(0xFF1E4D2B),
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-
-  // Action Tile matching .t, .b, .g classes from HTML
+  // Action Tile matching .t, .b, .g classes from HTML with soft earthy tints
   Widget _buildActionTile({
+    Color cardBg = Colors.white,
+    Color borderColor = const Color(0xFFE6E0D2),
+    Color shadowColor = const Color(0xFFE9E2D1),
     required Color bColor,
     required Color iconBg,
     CustomPainter? iconPainter,
     IconData? icon,
     Color? iconColor,
+    Color? chevronColor,
     required String title,
     required String subtitle,
     required VoidCallback onTap,
   }) {
+    final arrowFg = chevronColor ?? iconColor ?? const Color(0xFF1E4D2B);
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(22),
       child: Container(
         decoration: BoxDecoration(
-          color: Colors.white,
-          border: Border.all(color: const Color(0xFFE6E0D2), width: 1),
+          color: cardBg,
+          border: Border.all(color: borderColor, width: 1.1),
           borderRadius: BorderRadius.circular(22),
-          boxShadow: const [
+          boxShadow: [
             BoxShadow(
-              color: Color(0xFFE9E2D1),
-              offset: Offset(0, 3),
+              color: shadowColor,
+              offset: const Offset(0, 3),
             ),
           ],
         ),
@@ -1552,15 +1347,15 @@ class _HomeScreenState extends State<HomeScreen> {
                 width: 26,
                 height: 26,
                 child: Container(
-                  decoration: const BoxDecoration(
-                    color: Color(0xFFF3EFE4),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.92),
                     shape: BoxShape.circle,
                   ),
                   alignment: Alignment.center,
-                  child: const Icon(
+                  child: Icon(
                     Icons.chevron_right_rounded,
                     size: 16,
-                    color: Color(0xFF1E4D2B),
+                    color: arrowFg,
                   ),
                 ),
               ),
@@ -1626,6 +1421,34 @@ class _HomeScreenState extends State<HomeScreen> {
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildBentoMetricBox(String label, String val, IconData icon, Color bg, Color fg) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Column(
+        children: [
+          Icon(icon, size: 17, color: fg),
+          const SizedBox(height: 4),
+          Text(
+            val,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(fontFamily: 'Mukta', fontSize: 14.5, fontWeight: FontWeight.w700, color: fg, height: 1.1),
+          ),
+          Text(
+            label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(fontFamily: 'Mukta', fontSize: 11, fontWeight: FontWeight.w500, color: AppColors.textMuted),
+          ),
+        ],
       ),
     );
   }

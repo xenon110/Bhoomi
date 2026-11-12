@@ -331,6 +331,41 @@ class TursoService extends ChangeNotifier {
         date TEXT,
         created_at TEXT DEFAULT CURRENT_TIMESTAMP
       );
+      ''',
+      '''
+      CREATE TABLE IF NOT EXISTS bhoomi_field_settings (
+        id TEXT PRIMARY KEY,
+        location_name TEXT NOT NULL,
+        lat REAL NOT NULL,
+        lon REAL NOT NULL,
+        soil_ph REAL,
+        soil_texture TEXT,
+        updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+      );
+      ''',
+      '''
+      CREATE TABLE IF NOT EXISTS bhoomi_ai_scans (
+        id TEXT PRIMARY KEY,
+        crop_name TEXT NOT NULL,
+        scan_type TEXT NOT NULL,
+        disease_name TEXT NOT NULL,
+        severity TEXT,
+        danger_title TEXT,
+        immediate_action TEXT,
+        organic_treatment TEXT,
+        chemical_treatment TEXT,
+        is_relevant INTEGER DEFAULT 1,
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP
+      );
+      ''',
+      '''
+      CREATE TABLE IF NOT EXISTS bhoomi_ai_chats (
+        id TEXT PRIMARY KEY,
+        role TEXT NOT NULL,
+        message TEXT NOT NULL,
+        location_name TEXT,
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP
+      );
       '''
     ];
 
@@ -455,10 +490,53 @@ class TursoService extends ChangeNotifier {
   // ==========================================
   // --- 1. FARMER PROFILE CLOUD CRUD ---
   // ==========================================
-  Future<FarmerProfile?> fetchProfileCloud() async {
+  Future<FarmerProfile?> fetchProfileCloud([String? phoneOrId]) async {
     if (!isConnected) return null;
     try {
-      final rows = await queryRaw('SELECT * FROM bhoomi_profile WHERE id = ? LIMIT 1;', ['primary']);
+      List<Map<String, dynamic>> rows;
+      if (phoneOrId != null && phoneOrId.isNotEmpty) {
+        final clean = phoneOrId.replaceAll(RegExp(r'\D'), '');
+        rows = await queryRaw(
+          'SELECT * FROM bhoomi_profile WHERE id = ? OR id = ? OR REPLACE(REPLACE(phone, "+", ""), " ", "") LIKE ? LIMIT 1;',
+          [phoneOrId, 'user_$clean', '%$clean%'],
+        );
+      } else {
+        rows = await queryRaw(
+          'SELECT * FROM bhoomi_profile WHERE name != "" AND name != "Kisan User" ORDER BY updated_at DESC LIMIT 1;',
+        );
+      }
+      if (rows.isEmpty) return null;
+      final r = rows.first;
+      return FarmerProfile(
+        name: r['name']?.toString() ?? '',
+        phone: r['phone']?.toString() ?? '',
+        village: r['village']?.toString() ?? '',
+        district: r['district']?.toString() ?? '',
+        state: r['state']?.toString() ?? '',
+        language: r['language']?.toString() ?? 'English',
+        soilType: r['soil_type']?.toString() ?? '',
+        totalArea: (r['total_area'] as num?)?.toDouble() ?? 0.0,
+        kisanId: r['kisan_id']?.toString() ?? '',
+        aadhaarLinked: (r['aadhaar_linked'] as num?)?.toInt() == 1,
+        weatherAlerts: (r['weather_alerts'] as num?)?.toInt() != 0,
+        pestAlerts: (r['pest_alerts'] as num?)?.toInt() != 0,
+        mandiAlerts: (r['mandi_alerts'] as num?)?.toInt() != 0,
+        irrigationAlerts: (r['irrigation_alerts'] as num?)?.toInt() != 0,
+      );
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<FarmerProfile?> fetchProfileByPhone(String phone) async {
+    if (!isConnected) return null;
+    try {
+      final clean = phone.replaceAll(RegExp(r'\D'), '');
+      if (clean.length < 6) return null;
+      final rows = await queryRaw(
+        'SELECT * FROM bhoomi_profile WHERE REPLACE(REPLACE(phone, "+", ""), " ", "") LIKE ? OR id = ? LIMIT 1;',
+        ['%$clean%', 'user_$clean'],
+      );
       if (rows.isEmpty) return null;
       final r = rows.first;
       return FarmerProfile(
@@ -484,12 +562,14 @@ class TursoService extends ChangeNotifier {
 
   Future<void> upsertProfileCloud(FarmerProfile p) async {
     if (!isConnected) return;
+    final cleanPhone = p.phone.replaceAll(RegExp(r'\D'), '');
+    final profileId = cleanPhone.isNotEmpty ? 'user_$cleanPhone' : 'primary';
     const sql = '''
       INSERT INTO bhoomi_profile (
         id, name, phone, village, district, state, language,
         soil_type, total_area, kisan_id, aadhaar_linked,
         weather_alerts, pest_alerts, mandi_alerts, irrigation_alerts, updated_at
-      ) VALUES ('primary', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
       ON CONFLICT(id) DO UPDATE SET
         name=excluded.name,
         phone=excluded.phone,
@@ -508,6 +588,7 @@ class TursoService extends ChangeNotifier {
         updated_at=CURRENT_TIMESTAMP;
     ''';
     await executeRaw(sql, [
+      profileId,
       p.name,
       p.phone,
       p.village,
@@ -1063,5 +1144,107 @@ class TursoService extends ChangeNotifier {
   Future<void> deleteMarketListingCloud(String id) async {
     if (!isConnected) return;
     await executeRaw('DELETE FROM bhoomi_market_listings WHERE id = ?;', [id]);
+  }
+
+  // ==========================================
+  // --- 10. FIELD LOCATION & SOIL SETTINGS ---
+  // ==========================================
+  Future<Map<String, dynamic>?> fetchFieldSettingsCloud() async {
+    if (!isConnected) return null;
+    try {
+      final rows = await queryRaw(
+        'SELECT * FROM bhoomi_field_settings WHERE id = ? LIMIT 1;',
+        ['active_field'],
+      );
+      return rows.isNotEmpty ? rows.first : null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<void> saveFieldSettingsCloud({
+    required String locationName,
+    required double lat,
+    required double lon,
+    double? soilPh,
+    String? soilTexture,
+  }) async {
+    if (!isConnected) return;
+    const sql = '''
+      INSERT INTO bhoomi_field_settings (
+        id, location_name, lat, lon, soil_ph, soil_texture, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+      ON CONFLICT(id) DO UPDATE SET
+        location_name=excluded.location_name,
+        lat=excluded.lat,
+        lon=excluded.lon,
+        soil_ph=COALESCE(excluded.soil_ph, bhoomi_field_settings.soil_ph),
+        soil_texture=COALESCE(excluded.soil_texture, bhoomi_field_settings.soil_texture),
+        updated_at=CURRENT_TIMESTAMP;
+    ''';
+    await executeRaw(sql, [
+      'active_field',
+      locationName,
+      lat,
+      lon,
+      soilPh,
+      soilTexture,
+    ]);
+  }
+
+  // ==========================================
+  // --- 11. AI CROP SCANS CLOUD LOG ---
+  // ==========================================
+  Future<void> insertAiScanCloud({
+    required String cropName,
+    required String scanType,
+    required String diseaseName,
+    required String severity,
+    required String dangerTitle,
+    required String immediateAction,
+    required String organicTreatment,
+    required String chemicalTreatment,
+    required bool isRelevant,
+  }) async {
+    if (!isConnected) return;
+    const sql = '''
+      INSERT INTO bhoomi_ai_scans (
+        id, crop_name, scan_type, disease_name, severity, danger_title,
+        immediate_action, organic_treatment, chemical_treatment, is_relevant
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+    ''';
+    await executeRaw(sql, [
+      'SCN_${DateTime.now().millisecondsSinceEpoch}',
+      cropName,
+      scanType,
+      diseaseName,
+      severity,
+      dangerTitle,
+      immediateAction,
+      organicTreatment,
+      chemicalTreatment,
+      isRelevant ? 1 : 0,
+    ]);
+  }
+
+  // ==========================================
+  // --- 12. KISAN AI CHAT LOGS ---
+  // ==========================================
+  Future<void> insertAiChatCloud({
+    required String role,
+    required String message,
+    String? locationName,
+  }) async {
+    if (!isConnected) return;
+    const sql = '''
+      INSERT INTO bhoomi_ai_chats (id, role, message, location_name)
+      VALUES (?, ?, ?, ?);
+    ''';
+    await executeRaw(sql, [
+      'CHT_${DateTime.now().millisecondsSinceEpoch}_$role',
+      role,
+      message,
+      locationName ?? '',
+    ]);
   }
 }

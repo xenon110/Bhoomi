@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../l10n/app_strings.dart';
 import '../../models/farm.dart';
+import '../../services/mandi_service.dart';
 import '../../services/storage_service.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/safe_local_image.dart';
@@ -24,6 +25,17 @@ class _FarmPlannerScreenState extends State<FarmPlannerScreen> {
     final area = _storage.getPrimaryFarm().totalArea;
     if (area > 0) {
       _landArea = area;
+    }
+    _syncLiveMandiPrices();
+  }
+
+  void _syncLiveMandiPrices() {
+    final mandiService = MandiService();
+    for (final cropKey in _cropGuides.keys) {
+      final livePrice = mandiService.getBenchmarkPrice(cropKey);
+      if (livePrice > 0) {
+        _cropGuides[cropKey]!['pricePerQtl'] = livePrice.toDouble();
+      }
     }
   }
 

@@ -1,18 +1,22 @@
 import 'package:flutter/material.dart';
+import '../l10n/app_strings.dart';
 import '../models/crop.dart';
 import '../models/diary_entry.dart';
 import '../models/farm.dart';
+import '../services/mandi_service.dart';
 import '../services/storage_service.dart';
 import '../theme/app_theme.dart';
 import 'diary/farm_diary_screen.dart';
 import 'farm/add_crop_screen.dart';
 import 'farm/farm_detail_screen.dart';
+import 'market/mandi_arbitrage_screen.dart';
 import 'planner/farm_planner_screen.dart';
 import '../widgets/safe_local_image.dart';
 
 class MyFarmScreen extends StatefulWidget {
   final VoidCallback? onBackToHome;
-  const MyFarmScreen({Key? key, this.onBackToHome}) : super(key: key);
+  final VoidCallback? onOpenMarket;
+  const MyFarmScreen({Key? key, this.onBackToHome, this.onOpenMarket}) : super(key: key);
 
   @override
   State<MyFarmScreen> createState() => _MyFarmScreenState();
@@ -381,7 +385,12 @@ class _MyFarmScreenState extends State<MyFarmScreen> {
                     ),
             ),
 
-            const SizedBox(height: 16),
+            const SizedBox(height: 18),
+
+            // Section: APMC Mandi Rates (Moved from Home into My Farm)
+            _buildApmcMandiSection(),
+
+            const SizedBox(height: 18),
 
             // Section: Make better use of your land
             const Text(
@@ -1037,6 +1046,162 @@ class _MyFarmScreenState extends State<MyFarmScreen> {
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildApmcMandiSection() {
+    final isHindi = AppLanguage().isHindi;
+    final mandiItems = MandiService().getTopTickerPrices().take(4).toList();
+    if (mandiItems.isEmpty) return const SizedBox.shrink();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(
+              isHindi ? 'आज के APMC मंडी भाव' : "Today's APMC Rates",
+              style: const TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w600,
+                color: Color(0xFF1B2A21),
+              ),
+            ),
+            InkWell(
+              onTap: widget.onOpenMarket ??
+                  () => Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (_) => const MandiArbitrageScreen()),
+                      ),
+              borderRadius: BorderRadius.circular(10),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      isHindi ? 'सभी मंडियां' : 'See all',
+                      style: const TextStyle(
+                        fontFamily: 'Mukta',
+                        fontSize: 13.5,
+                        fontWeight: FontWeight.w500,
+                        color: Color(0xFF1E4D2B),
+                      ),
+                    ),
+                    const SizedBox(width: 2),
+                    const Icon(Icons.chevron_right_rounded, size: 17, color: Color(0xFF1E4D2B)),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 10),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(22),
+            border: Border.all(color: const Color(0xFFE6E0D2), width: 1),
+            boxShadow: const [
+              BoxShadow(
+                color: Color(0xFFE9E2D1),
+                offset: Offset(0, 3),
+              ),
+            ],
+          ),
+          child: Column(
+            children: [
+              for (int i = 0; i < mandiItems.length; i++) ...[
+                InkWell(
+                  onTap: widget.onOpenMarket ??
+                      () => Navigator.push(
+                            context,
+                            MaterialPageRoute(builder: (_) => const MandiArbitrageScreen()),
+                          ),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 11),
+                    child: Row(
+                      children: [
+                        Container(
+                          width: 42,
+                          height: 42,
+                          decoration: BoxDecoration(
+                            color: mandiItems[i].isUp ? const Color(0xFFE2EFDF) : const Color(0xFFF6F2E9),
+                            borderRadius: BorderRadius.circular(13),
+                          ),
+                          alignment: Alignment.center,
+                          child: Icon(
+                            Icons.storefront_outlined,
+                            size: 20,
+                            color: mandiItems[i].isUp ? const Color(0xFF1E4D2B) : const Color(0xFF8A5600),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                mandiItems[i].cropName,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  fontFamily: 'Mukta',
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w600,
+                                  color: Color(0xFF1B2A21),
+                                ),
+                              ),
+                              Text(
+                                '${mandiItems[i].mandiName} · ${mandiItems[i].distance}',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  fontFamily: 'Mukta',
+                                  fontSize: 12.5,
+                                  fontWeight: FontWeight.w400,
+                                  color: Color(0xFF55655A),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          children: [
+                            Text(
+                              '₹${mandiItems[i].modalPrice}/qtl',
+                              style: const TextStyle(
+                                fontFamily: 'Mukta',
+                                fontSize: 15.5,
+                                fontWeight: FontWeight.w600,
+                                color: Color(0xFF1B2A21),
+                              ),
+                            ),
+                            Text(
+                              mandiItems[i].priceChange,
+                              style: TextStyle(
+                                fontFamily: 'Mukta',
+                                fontSize: 12,
+                                fontWeight: FontWeight.w500,
+                                color: mandiItems[i].isUp ? const Color(0xFF1E4D2B) : const Color(0xFF9A3E1E),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                if (i < mandiItems.length - 1)
+                  const Divider(height: 1, thickness: 1, color: Color(0xFFEEE8DA)),
+              ],
+            ],
+          ),
+        ),
+      ],
     );
   }
 }

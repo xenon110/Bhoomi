@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../../l10n/app_strings.dart';
 import '../../theme/app_theme.dart';
 import '../scan/scan_ask_screen.dart';
+import '../chat/farmer_ai_chat_screen.dart';
 
 class VoiceAssistantModal extends StatefulWidget {
   const VoiceAssistantModal({Key? key}) : super(key: key);
@@ -357,6 +358,37 @@ class _VoiceAssistantModalState extends State<VoiceAssistantModal>
                   ),
                 );
               }).toList(),
+            ),
+          ),
+          const SizedBox(height: 16),
+
+          // Full conversation with Kisan AI Dost
+          SizedBox(
+            width: double.infinity,
+            height: 46,
+            child: ElevatedButton.icon(
+              onPressed: () {
+                Navigator.pop(context);
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const FarmerAiChatScreen()),
+                );
+              },
+              icon: const Icon(Icons.chat_bubble_outline_rounded, color: Colors.white, size: 18),
+              label: Text(
+                isHindi ? 'किसान AI मित्र से पूरी बातचीत करें' : 'Full Conversation with Kisan AI',
+                style: const TextStyle(
+                  fontFamily: 'Mukta',
+                  fontSize: 14,
+                  fontWeight: FontWeight.w700,
+                  color: Colors.white,
+                ),
+              ),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primaryGreen,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                elevation: 0,
+              ),
             ),
           ),
           const SizedBox(height: 16),

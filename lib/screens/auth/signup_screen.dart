@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../../main.dart';
 import '../../models/crop.dart';
 import '../../models/farm.dart';
@@ -16,6 +17,7 @@ class SignupProfileScreen extends StatefulWidget {
 class _SignupProfileScreenState extends State<SignupProfileScreen> {
   late TextEditingController _nameController;
   late TextEditingController _villageController;
+  late TextEditingController _phoneController;
 
   String _district = 'Palamu';
   String _state = 'Jharkhand';
@@ -78,47 +80,28 @@ class _SignupProfileScreenState extends State<SignupProfileScreen> {
   @override
   void initState() {
     super.initState();
-    final prof = StorageService().getProfile();
     _nameController = TextEditingController();
     _villageController = TextEditingController();
-    if (prof.district.isNotEmpty && _districts.contains(prof.district)) {
-      _district = prof.district;
-    }
-    if (widget.phoneNumber == null && prof.totalArea > 0) {
-      _landArea = prof.totalArea;
-    }
-    if (prof.state.isNotEmpty && _states.contains(prof.state)) {
-      _state = prof.state;
-    }
-    if (prof.soilType.isNotEmpty && _soilTypes.contains(prof.soilType)) {
-      _soilType = prof.soilType;
-    }
+    _phoneController = TextEditingController(text: widget.phoneNumber ?? '');
+    _landArea = 2.0;
+    _district = 'Palamu';
+    _state = 'Jharkhand';
+    _soilType = 'Loamy / Sandy Loam';
+    _selectedCrops.clear();
   }
 
   @override
   void dispose() {
     _nameController.dispose();
     _villageController.dispose();
+    _phoneController.dispose();
     super.dispose();
   }
 
   void _onToggleCrop(String crop) {
     setState(() {
       if (_selectedCrops.contains(crop)) {
-        if (_selectedCrops.length > 1) {
-          _selectedCrops.remove(crop);
-        } else {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text(
-                'Please select at least one crop',
-                style: TextStyle(fontFamily: 'Mukta', fontWeight: FontWeight.w600),
-              ),
-              backgroundColor: Color(0xFF1E4D2B),
-              duration: Duration(seconds: 1),
-            ),
-          );
-        }
+        _selectedCrops.remove(crop);
       } else {
         _selectedCrops.add(crop);
       }
@@ -191,7 +174,7 @@ class _SignupProfileScreenState extends State<SignupProfileScreen> {
                           ),
                           alignment: Alignment.center,
                           child: Text(
-                            isSelected ? 'âœ“ $crop' : crop,
+                            isSelected ? '\u2713 $crop' : crop,
                             style: TextStyle(
                               fontFamily: 'Mukta',
                               fontSize: 14.5,
@@ -411,10 +394,26 @@ class _SignupProfileScreenState extends State<SignupProfileScreen> {
       );
       return;
     }
+
+    final rawPhone = widget.phoneNumber?.trim().isNotEmpty == true
+        ? widget.phoneNumber!.trim()
+        : _phoneController.text.trim();
+    final cleanDigits = rawPhone.replaceAll(RegExp(r'\D'), '');
+    if (cleanDigits.length < 10) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Please enter a valid 10-digit mobile number',
+            style: TextStyle(fontFamily: 'Mukta', fontWeight: FontWeight.w600),
+          ),
+          backgroundColor: Color(0xFF1E4D2B),
+          duration: Duration(seconds: 2),
+        ),
+      );
+      return;
+    }
+    final phone = '+91 $cleanDigits';
     final village = _villageController.text.trim().isEmpty ? 'Village' : _villageController.text.trim();
-    final phone = widget.phoneNumber != null && widget.phoneNumber!.isNotEmpty
-        ? '+91 ${widget.phoneNumber}'
-        : StorageService().getProfile().phone;
 
     final stCode = _state.length >= 2 ? _state.substring(0, 2).toUpperCase() : 'JH';
     final dtCode = _district.length >= 3 ? _district.substring(0, 3).toUpperCase() : 'PLM';
@@ -441,34 +440,45 @@ class _SignupProfileScreenState extends State<SignupProfileScreen> {
 
     // 2. Setup Fields & Crops based on user selection
     final cropList = _selectedCrops.toList();
-    final areaPerCrop = (_landArea / cropList.length).clamp(0.5, 50.0);
+    final areaPerCrop = cropList.isNotEmpty
+        ? (_landArea / cropList.length).clamp(0.5, 50.0)
+        : _landArea;
 
     final fields = <Field>[];
     final crops = <Crop>[];
 
-    for (int i = 0; i < cropList.length; i++) {
-      final cName = cropList[i];
-      final plotLabel = i == 0 ? 'North Plot' : (i == 1 ? 'South Plot' : 'East Plot #${i + 1}');
+    if (cropList.isEmpty) {
       fields.add(Field(
-        name: plotLabel,
-        area: areaPerCrop,
-        crop: cName,
-        sowingDate: DateTime.now().subtract(const Duration(days: 30)),
+        name: 'Main Field',
+        area: _landArea,
+        crop: 'Open Farmland',
+        sowingDate: DateTime.now(),
       ));
-      crops.add(Crop(
-        name: cName,
-        variety: cName == 'Ashwagandha'
-            ? 'Nagori / JA-20'
-            : (cName == 'Tulsi'
-                ? 'Krishna Tulsi'
-                : (cName == 'Mustard'
-                    ? 'Varuna (T-59)'
-                    : (cName == 'Wheat' ? 'Sharbati HD-2967' : 'Certified Hybrid'))),
-        growthStage: 'Active vegetative',
-        sowingDate: DateTime.now().subtract(const Duration(days: 30)),
-        expectedHarvestDate: DateTime.now().add(const Duration(days: 90)),
-        notes: 'Cultivated under organic practices with precision drip irrigation.',
-      ));
+    } else {
+      for (int i = 0; i < cropList.length; i++) {
+        final cName = cropList[i];
+        final plotLabel = i == 0 ? 'North Plot' : (i == 1 ? 'South Plot' : 'East Plot #${i + 1}');
+        fields.add(Field(
+          name: plotLabel,
+          area: areaPerCrop,
+          crop: cName,
+          sowingDate: DateTime.now().subtract(const Duration(days: 30)),
+        ));
+        crops.add(Crop(
+          name: cName,
+          variety: cName == 'Ashwagandha'
+              ? 'Nagori / JA-20'
+              : (cName == 'Tulsi'
+                  ? 'Krishna Tulsi'
+                  : (cName == 'Mustard'
+                      ? 'Varuna (T-59)'
+                      : (cName == 'Wheat' ? 'Sharbati HD-2967' : 'Certified Hybrid'))),
+          growthStage: 'Active vegetative',
+          sowingDate: DateTime.now().subtract(const Duration(days: 30)),
+          expectedHarvestDate: DateTime.now().add(const Duration(days: 90)),
+          notes: 'Cultivated under organic practices with precision drip irrigation.',
+        ));
+      }
     }
 
     final farm = Farm(
@@ -510,9 +520,10 @@ class _SignupProfileScreenState extends State<SignupProfileScreen> {
       body: SafeArea(
         top: true,
         bottom: true,
-        child: Center(
+        child: Align(
+          alignment: Alignment.topCenter,
           child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 500),
+            constraints: const BoxConstraints(maxWidth: 520),
             child: Column(
               children: [
                 // Top Bar: Back Button + STEP 2 OF 2 Progress Bar
@@ -586,7 +597,8 @@ class _SignupProfileScreenState extends State<SignupProfileScreen> {
                     Expanded(
                       child: SingleChildScrollView(
                         physics: const BouncingScrollPhysics(),
-                        padding: const EdgeInsets.fromLTRB(24, 14, 24, 0),
+                        keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+                        padding: const EdgeInsets.fromLTRB(24, 14, 24, 32),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
@@ -636,6 +648,8 @@ class _SignupProfileScreenState extends State<SignupProfileScreen> {
                               padding: const EdgeInsets.symmetric(horizontal: 16),
                               child: TextField(
                                 controller: _nameController,
+                                scrollPadding: const EdgeInsets.all(90.0),
+                                textInputAction: TextInputAction.next,
                                 style: const TextStyle(
                                   fontFamily: 'Mukta',
                                   fontSize: 17,
@@ -656,6 +670,73 @@ class _SignupProfileScreenState extends State<SignupProfileScreen> {
                                 ),
                               ),
                             ),
+
+                            if (widget.phoneNumber == null || widget.phoneNumber!.isEmpty) ...[
+                              const SizedBox(height: 12),
+                              const Text(
+                                'Mobile number',
+                                style: TextStyle(
+                                  fontFamily: 'Mukta',
+                                  fontSize: 13.5,
+                                  fontWeight: FontWeight.w800,
+                                  color: Color(0xFF3F5547),
+                                ),
+                              ),
+                              const SizedBox(height: 6),
+                              Container(
+                                height: 56,
+                                decoration: BoxDecoration(
+                                  color: Colors.white,
+                                  borderRadius: BorderRadius.circular(18),
+                                  border: Border.all(color: const Color(0xFFDDD6C4), width: 1.5),
+                                ),
+                                padding: const EdgeInsets.symmetric(horizontal: 16),
+                                child: Row(
+                                  children: [
+                                    const Text(
+                                      '\u{1F1EE}\u{1F1F3} +91',
+                                      style: TextStyle(
+                                        fontFamily: 'Mukta',
+                                        fontSize: 17,
+                                        fontWeight: FontWeight.w700,
+                                        color: Color(0xFF1B2A21),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 12),
+                                    Expanded(
+                                      child: TextField(
+                                        controller: _phoneController,
+                                        keyboardType: TextInputType.phone,
+                                        scrollPadding: const EdgeInsets.all(90.0),
+                                        textInputAction: TextInputAction.next,
+                                        inputFormatters: [
+                                          FilteringTextInputFormatter.digitsOnly,
+                                          LengthLimitingTextInputFormatter(10),
+                                        ],
+                                        style: const TextStyle(
+                                          fontFamily: 'Mukta',
+                                          fontSize: 17,
+                                          fontWeight: FontWeight.w700,
+                                          color: Color(0xFF1B2A21),
+                                        ),
+                                        decoration: const InputDecoration(
+                                          hintText: 'Enter 10-digit number',
+                                          hintStyle: TextStyle(
+                                            fontFamily: 'Mukta',
+                                            fontSize: 16,
+                                            color: Color(0xFF9EAFA4),
+                                            fontWeight: FontWeight.w400,
+                                          ),
+                                          border: InputBorder.none,
+                                          isDense: true,
+                                          contentPadding: EdgeInsets.zero,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
 
                             const SizedBox(height: 12),
 
@@ -688,6 +769,8 @@ class _SignupProfileScreenState extends State<SignupProfileScreen> {
                                         padding: const EdgeInsets.symmetric(horizontal: 16),
                                         child: TextField(
                                           controller: _villageController,
+                                          scrollPadding: const EdgeInsets.all(90.0),
+                                          textInputAction: TextInputAction.done,
                                           style: const TextStyle(
                                             fontFamily: 'Mukta',
                                             fontSize: 17,
@@ -1017,7 +1100,7 @@ class _SignupProfileScreenState extends State<SignupProfileScreen> {
                                       ),
                                       alignment: Alignment.center,
                                       child: Text(
-                                        isSelected ? 'âœ“ $crop' : crop,
+                                        isSelected ? '\u2713 $crop' : crop,
                                         style: TextStyle(
                                           fontFamily: 'Mukta',
                                           fontSize: 14.5,

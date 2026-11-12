@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'firebase_options.dart';
 import 'l10n/app_strings.dart';
 import 'screens/advice_screen.dart';
 import 'screens/diary/farm_diary_screen.dart';
@@ -20,11 +22,21 @@ import 'screens/auth/language_selection_screen.dart';
 import 'screens/auth/login_screen.dart';
 import 'screens/auth/otp_screen.dart';
 import 'screens/auth/signup_screen.dart';
+import 'screens/chat/farmer_ai_chat_screen.dart';
 import 'services/storage_service.dart';
 import 'theme/app_theme.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  try {
+    if (Firebase.apps.isEmpty) {
+      await Firebase.initializeApp(
+        options: DefaultFirebaseOptions.currentPlatform,
+      );
+    }
+  } catch (e) {
+    debugPrint('Firebase init error: $e');
+  }
   await StorageService().init();
   runApp(const BhoomiApp());
 }
@@ -48,7 +60,9 @@ class BhoomiApp extends StatelessWidget {
         Locale('hi', ''),
       ],
       routes: {
+        '/farmer-chat': (_) => const FarmerAiChatScreen(),
         '/scan': (_) => const ScanAskScreen(),
+        '/scan-ask': (_) => const ScanAskScreen(),
         '/planner': (_) => const FarmPlannerScreen(),
         '/diary': (_) => const FarmDiaryScreen(),
         '/fertilizer': (_) => const EquipmentRentalScreen(),
@@ -93,7 +107,10 @@ class _MainNavigationState extends State<MainNavigation> {
       builder: (context, _) {
         final List<Widget> pages = [
           HomeScreen(onNavigateTab: _onItemTapped),
-          MyFarmScreen(onBackToHome: () => _onItemTapped(0)),
+          MyFarmScreen(
+            onBackToHome: () => _onItemTapped(0),
+            onOpenMarket: () => _onItemTapped(3),
+          ),
           AdviceScreen(onBackToHome: () => _onItemTapped(0)),
           MarketScreen(onBackToHome: () => _onItemTapped(0)),
           ProfileScreen(onNavigateTab: _onItemTapped),

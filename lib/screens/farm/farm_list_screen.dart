@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../models/farm.dart';
+import '../../services/mandi_service.dart';
 import '../../services/storage_service.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/safe_local_image.dart';
@@ -285,14 +286,35 @@ class _FarmListScreenState extends State<FarmListScreen> {
                                                 Column(
                                                   crossAxisAlignment: CrossAxisAlignment.start,
                                                   children: [
-                                                    Text(
-                                                      crop.name,
-                                                      style: const TextStyle(
-                                                        fontFamily: 'Mukta',
-                                                        fontSize: 13,
-                                                        fontWeight: FontWeight.w600,
-                                                        color: Color(0xFF1B2A21),
-                                                      ),
+                                                    Row(
+                                                      children: [
+                                                        Text(
+                                                          crop.name,
+                                                          style: const TextStyle(
+                                                            fontFamily: 'Mukta',
+                                                            fontSize: 13,
+                                                            fontWeight: FontWeight.w600,
+                                                            color: Color(0xFF1B2A21),
+                                                          ),
+                                                        ),
+                                                        const SizedBox(width: 6),
+                                                        Container(
+                                                          padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                                                          decoration: BoxDecoration(
+                                                            color: const Color(0xFFE2EFDF),
+                                                            borderRadius: BorderRadius.circular(6),
+                                                          ),
+                                                          child: Text(
+                                                            '₹${MandiService().getBenchmarkPrice(crop.name)}/Qtl',
+                                                            style: const TextStyle(
+                                                              fontFamily: 'Mukta',
+                                                              fontSize: 9.5,
+                                                              fontWeight: FontWeight.w500,
+                                                              color: Color(0xFF1E4D2B),
+                                                            ),
+                                                          ),
+                                                        ),
+                                                      ],
                                                     ),
                                                     Text(
                                                       '${crop.variety != null && crop.variety!.isNotEmpty ? crop.variety : "Crop"} · ${crop.growthStage ?? "Active"}',

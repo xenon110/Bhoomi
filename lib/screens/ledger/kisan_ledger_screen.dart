@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../l10n/app_strings.dart';
 import '../../models/ledger_entry.dart';
+import '../../services/agro_intel_service.dart';
+import '../../services/gemini_service.dart';
+import '../../services/mandi_service.dart';
 import '../../services/storage_service.dart';
 import '../../theme/app_theme.dart';
 
@@ -20,12 +23,47 @@ class _KisanLedgerScreenState extends State<KisanLedgerScreen> {
   String _selectedCrop = 'All';
   bool get isHindi => AppLanguage().isHindi;
 
+  GeminiLedgerInsight? _ledgerInsight;
+  bool _isAnalyzingLedger = false;
+
   final List<String> _crops = ['All', 'Mustard', 'Wheat', 'Ashwagandha', 'General'];
 
   @override
   void initState() {
     super.initState();
     _storage.addListener(_onStorageChanged);
+    _analyzeLedgerWithGemini();
+  }
+
+  Future<void> _analyzeLedgerWithGemini() async {
+    if (_isAnalyzingLedger) return;
+    if (mounted) setState(() => _isAnalyzingLedger = true);
+    try {
+      final snap = await AgroIntelService().buildFarmIntelSnapshot();
+      final targetCrop = _selectedCrop == 'All'
+          ? (snap.activeCrops.isNotEmpty ? snap.activeCrops.first : 'Mustard')
+          : _selectedCrop;
+      final mandiRate = MandiService().getBenchmarkPrice(targetCrop);
+      final expense = _storage.getTotalExpense(cropName: _selectedCrop);
+      final income = _storage.getTotalIncome(cropName: _selectedCrop);
+
+      final insight = await GeminiService().analyzeLedgerInsights(
+        promptContext: snap.promptContext,
+        totalExpense: expense,
+        totalIncome: income,
+        topCategory: snap.topExpenseCategory,
+        topCrop: targetCrop,
+        mandiRate: mandiRate,
+      );
+      if (mounted) {
+        setState(() {
+          _ledgerInsight = insight;
+          _isAnalyzingLedger = false;
+        });
+      }
+    } catch (_) {
+      if (mounted) setState(() => _isAnalyzingLedger = false);
+    }
   }
 
   @override
@@ -665,6 +703,11 @@ class _KisanLedgerScreenState extends State<KisanLedgerScreen> {
                 ),
               ),
 
+              const SizedBox(height: 14),
+
+              // 3.5 AI Break-Even & Crop Rotation Insights Card
+              _buildGeminiLedgerInsightCard(isHindi, totalExpense, totalIncome),
+
               const SizedBox(height: 16),
 
               // 4. Crop Filter Chips
@@ -678,7 +721,10 @@ class _KisanLedgerScreenState extends State<KisanLedgerScreen> {
                     final crop = _crops[idx];
                     final isSel = _selectedCrop == crop;
                     return GestureDetector(
-                      onTap: () => setState(() => _selectedCrop = crop),
+                      onTap: () {
+                        setState(() => _selectedCrop = crop);
+                        _analyzeLedgerWithGemini();
+                      },
                       child: Container(
                         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
                         decoration: BoxDecoration(
@@ -868,6 +914,288 @@ class _KisanLedgerScreenState extends State<KisanLedgerScreen> {
                 ),
               ),
             ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildGeminiLedgerInsightCard(bool isHindi, double totalExpense, double totalIncome) {
+    final targetCrop = _selectedCrop == 'All' ? 'Mustard' : _selectedCrop;
+    final rate = MandiService().getBenchmarkPrice(targetCrop);
+    final insight = _ledgerInsight ??
+        GeminiLedgerInsight.computed(
+          totalExpense: totalExpense,
+          totalIncome: totalIncome,
+          topCategory: 'Fertilizer',
+          topCrop: targetCrop,
+          mandiRate: rate,
+        );
+
+    final reqQty = rate > 0 ? (totalExpense / rate) : 0.0;
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: AppStyles.cardBox,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 28,
+                height: 28,
+                decoration: BoxDecoration(
+                  color: AppColors.mintTint,
+                  borderRadius: BorderRadius.circular(9),
+                ),
+                child: const Icon(Icons.auto_awesome_rounded, color: AppColors.primaryGreen, size: 16),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  isHindi ? 'AI लागत व मुनाफा रडार' : 'AI Profit & Break-Even Radar',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontFamily: 'Mukta',
+                    fontSize: 14.5,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.textDark,
+                  ),
+                ),
+              ),
+              InkWell(
+                onTap: () => _showLedgerInsightSheet(isHindi, insight, rate, targetCrop),
+                borderRadius: BorderRadius.circular(10),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: AppColors.mintTint,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        isHindi ? 'विस्तार' : 'AI Plan',
+                        style: const TextStyle(fontFamily: 'Mukta', fontSize: 11.5, fontWeight: FontWeight.w700, color: AppColors.primaryGreen),
+                      ),
+                      const Icon(Icons.chevron_right_rounded, size: 15, color: AppColors.primaryGreen),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(width: 4),
+              InkWell(
+                onTap: _analyzeLedgerWithGemini,
+                borderRadius: BorderRadius.circular(10),
+                child: Padding(
+                  padding: const EdgeInsets.all(4),
+                  child: _isAnalyzingLedger
+                      ? const SizedBox(
+                          width: 14,
+                          height: 14,
+                          child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.primaryGreen),
+                        )
+                      : const Icon(Icons.refresh_rounded, size: 17, color: AppColors.primaryGreen),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+
+          // Crisp 2-Metric KPI Row
+          Row(
+            children: [
+              Expanded(
+                child: InkWell(
+                  onTap: () => _showLedgerInsightSheet(isHindi, insight, rate, targetCrop),
+                  borderRadius: BorderRadius.circular(14),
+                  child: Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFEBF7FD),
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            const Icon(Icons.calculate_outlined, size: 14, color: Color(0xFF0369A1)),
+                            const SizedBox(width: 4),
+                            Text(
+                              isHindi ? 'लागत वसूली लक्ष्य' : 'Break-Even Qty',
+                              style: const TextStyle(fontFamily: 'Mukta', fontSize: 11, fontWeight: FontWeight.w600, color: Color(0xFF0369A1)),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          '${reqQty.toStringAsFixed(1)} ${isHindi ? "क्विंटल" : "Qtl"}',
+                          style: const TextStyle(fontFamily: 'Mukta', fontSize: 17, fontWeight: FontWeight.w700, color: AppColors.textDark, height: 1.1),
+                        ),
+                        Text(
+                          '@ ₹$rate/${isHindi ? "क्विं." : "Qtl"}',
+                          style: const TextStyle(fontFamily: 'Mukta', fontSize: 10.5, color: AppColors.textMuted),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: InkWell(
+                  onTap: () => _showLedgerInsightSheet(isHindi, insight, rate, targetCrop),
+                  borderRadius: BorderRadius.circular(14),
+                  child: Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFEAF6ED),
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            const Icon(Icons.autorenew_rounded, size: 14, color: AppColors.primaryGreen),
+                            const SizedBox(width: 4),
+                            Text(
+                              isHindi ? 'अगली बोनस फसल' : 'Next Rotation',
+                              style: const TextStyle(fontFamily: 'Mukta', fontSize: 11, fontWeight: FontWeight.w600, color: AppColors.primaryGreen),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          isHindi ? 'मूंग / उड़द' : 'Moong / Urad',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(fontFamily: 'Mukta', fontSize: 16.5, fontWeight: FontWeight.w700, color: AppColors.textDark, height: 1.1),
+                        ),
+                        Text(
+                          isHindi ? '~40% यूरिया बचत' : '~40% Urea Savings',
+                          style: const TextStyle(fontFamily: 'Mukta', fontSize: 10.5, color: AppColors.textMuted),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showLedgerInsightSheet(
+    bool isHindi,
+    GeminiLedgerInsight insight,
+    int rate,
+    String targetCrop,
+  ) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => Container(
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+        ),
+        padding: const EdgeInsets.fromLTRB(20, 14, 20, 26),
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Container(
+                  width: 42,
+                  height: 4,
+                  margin: const EdgeInsets.only(bottom: 14),
+                  decoration: BoxDecoration(color: Colors.grey.withOpacity(0.3), borderRadius: BorderRadius.circular(10)),
+                ),
+              ),
+              Text(
+                isHindi ? 'AI बही-खाता व फसल चक्र योजना' : 'AI Farm Profit & Rotation Plan',
+                style: const TextStyle(fontFamily: 'Mukta', fontSize: 18.5, fontWeight: FontWeight.w700, color: AppColors.textDark),
+              ),
+              const SizedBox(height: 12),
+              _buildLedgerDetailBox(
+                icon: Icons.calculate_outlined,
+                title: isHindi ? 'लागत वसूली गणित ($targetCrop)' : 'Break-Even Target ($targetCrop)',
+                body: insight.getBreakEven(isHindi),
+                bg: const Color(0xFFEBF7FD),
+                accent: const Color(0xFF0369A1),
+              ),
+              const SizedBox(height: 10),
+              _buildLedgerDetailBox(
+                icon: Icons.savings_outlined,
+                title: isHindi ? 'खर्च कटौती सलाह' : 'Cost Reduction Tip',
+                body: insight.getCostTip(isHindi),
+                bg: const Color(0xFFFEF7E6),
+                accent: const Color(0xFFB45309),
+              ),
+              const SizedBox(height: 10),
+              _buildLedgerDetailBox(
+                icon: Icons.autorenew_rounded,
+                title: isHindi ? 'अगली फसल चक्र योजना' : 'Nitrogen Crop Rotation',
+                body: insight.getRotation(isHindi),
+                bg: const Color(0xFFEAF6ED),
+                accent: AppColors.primaryGreen,
+              ),
+              const SizedBox(height: 16),
+              SizedBox(
+                width: double.infinity,
+                height: 46,
+                child: ElevatedButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.primaryGreen,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                    elevation: 0,
+                  ),
+                  child: Text(isHindi ? 'ठीक है' : 'Got It', style: const TextStyle(fontFamily: 'Mukta', fontSize: 15, fontWeight: FontWeight.w600, color: Colors.white)),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildLedgerDetailBox({
+    required IconData icon,
+    required String title,
+    required String body,
+    required Color bg,
+    required Color accent,
+  }) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(16)),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, size: 18, color: accent),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(title, style: TextStyle(fontFamily: 'Mukta', fontSize: 13, fontWeight: FontWeight.w700, color: accent)),
+                const SizedBox(height: 2),
+                Text(body, style: const TextStyle(fontFamily: 'Mukta', fontSize: 12.5, color: AppColors.textDark, height: 1.35)),
+              ],
+            ),
           ),
         ],
       ),

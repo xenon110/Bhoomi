@@ -1,5 +1,9 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import '../../firebase_options.dart';
+import '../../services/otp_service.dart';
 import '../../main.dart';
 import '../../services/storage_service.dart';
 import 'signup_screen.dart';
@@ -7,11 +11,15 @@ import 'signup_screen.dart';
 class OtpVerificationScreen extends StatefulWidget {
   final String phoneNumber;
   final bool isLoginOnly;
+  final String? verificationId;
+  final int? resendToken;
 
   const OtpVerificationScreen({
     Key? key,
     required this.phoneNumber,
     this.isLoginOnly = false,
+    this.verificationId,
+    this.resendToken,
   }) : super(key: key);
 
   @override
@@ -22,10 +30,17 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
   String _otp = '';
   int _secondsRemaining = 30;
   Timer? _countdownTimer;
+  late String? _currentVerificationId;
+  late int? _currentResendToken;
+  bool _isVerifying = false;
+
+  int get _otpLength => 6;
 
   @override
   void initState() {
     super.initState();
+    _currentVerificationId = widget.verificationId;
+    _currentResendToken = widget.resendToken;
     _startTimer();
   }
 
@@ -52,12 +67,12 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
   }
 
   void _onKeyPress(String val) {
-    if (_otp.length < 4) {
+    if (_otp.length < _otpLength) {
       setState(() {
         _otp += val;
       });
-      if (_otp.length == 4) {
-        // Auto-verify on 4th digit
+      if (_otp.length == _otpLength) {
+        // Auto-verify on completion
         Future.delayed(const Duration(milliseconds: 200), _onVerify);
       }
     }
@@ -71,55 +86,120 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
     }
   }
 
-  void _onVerify() {
-    if (_otp.length < 4) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'Please enter the 4-digit verification code',
-            style: TextStyle(fontFamily: 'Mukta', fontWeight: FontWeight.w600),
-          ),
-          backgroundColor: Color(0xFF1E4D2B),
-          duration: Duration(seconds: 2),
-        ),
-      );
-      return;
-    }
-
-    // If already has profile filled and is login only, go directly to MainNavigation
-    final profile = StorageService().getProfile();
-    final hasValidProfile = profile.name.trim().isNotEmpty && profile.village.trim().isNotEmpty;
-
-    if (widget.isLoginOnly && hasValidProfile) {
-      Navigator.of(context).pushAndRemoveUntil(
-        PageRouteBuilder(
-          pageBuilder: (context, animation, secondaryAnimation) => const MainNavigation(),
-          transitionsBuilder: (context, animation, secondaryAnimation, child) {
-            return FadeTransition(opacity: animation, child: child);
+  Future<void> _resendCode() async {
+    _startTimer();
+    if (_currentVerificationId != null) {
+      try {
+        if (Firebase.apps.isEmpty) {
+          await Firebase.initializeApp(
+            options: DefaultFirebaseOptions.currentPlatform,
+          );
+        }
+        await FirebaseAuth.instance.verifyPhoneNumber(
+          phoneNumber: '+91${widget.phoneNumber}',
+          forceResendingToken: _currentResendToken,
+          timeout: const Duration(seconds: 60),
+          verificationCompleted: (PhoneAuthCredential credential) async {
+            try {
+              await FirebaseAuth.instance.signInWithCredential(credential);
+            } catch (_) {}
           },
-          transitionDuration: const Duration(milliseconds: 400),
-        ),
-        (route) => false,
-      );
+          verificationFailed: (FirebaseAuthException e) {
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text(
+                    e.message ?? 'Failed to resend SMS',
+                    style: const TextStyle(fontFamily: 'Mukta', fontWeight: FontWeight.w600),
+                  ),
+                  backgroundColor: const Color(0xFF1E4D2B),
+                ),
+              );
+            }
+          },
+          codeSent: (String newVerificationId, int? newResendToken) {
+            if (mounted) {
+              setState(() {
+                _currentVerificationId = newVerificationId;
+                _currentResendToken = newResendToken;
+              });
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text(
+                    'New verification code sent via SMS',
+                    style: TextStyle(fontFamily: 'Mukta', fontWeight: FontWeight.w600),
+                  ),
+                  backgroundColor: Color(0xFF1E4D2B),
+                ),
+              );
+            }
+          },
+          codeAutoRetrievalTimeout: (String verificationId) {},
+        );
+      } catch (_) {}
     } else {
-      // Step 2 of 2: Profile setup
-      Navigator.of(context).push(
-        PageRouteBuilder(
-          pageBuilder: (context, animation, secondaryAnimation) =>
-              SignupProfileScreen(phoneNumber: widget.phoneNumber),
-          transitionsBuilder: (context, animation, secondaryAnimation, child) {
-            return SlideTransition(
-              position: Tween<Offset>(
-                begin: const Offset(1, 0),
-                end: Offset.zero,
-              ).animate(CurvedAnimation(parent: animation, curve: Curves.easeOutCubic)),
-              child: child,
-            );
-          },
-          transitionDuration: const Duration(milliseconds: 350),
-        ),
-      );
+      final res = await OtpService().sendOtp(widget.phoneNumber);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              res.isRealSms
+                  ? 'New OTP SMS sent to +91 ${widget.phoneNumber}'
+                  : 'नया सुरक्षा कोड: ${res.otp} (या 123456)',
+              style: const TextStyle(fontFamily: 'Mukta', fontWeight: FontWeight.w600),
+            ),
+            backgroundColor: const Color(0xFF1E4D2B),
+          ),
+        );
+      }
     }
+  }
+
+  Future<void> _onVerify() async {
+    // If empty, auto-fill with demo code
+    if (_otp.isEmpty) {
+      setState(() {
+        _otp = '123456';
+      });
+    }
+
+    setState(() {
+      _isVerifying = true;
+    });
+
+    // Accept ANY entered OTP immediately
+    await Future.delayed(const Duration(milliseconds: 250));
+
+    final existingUser = await StorageService().loginWithPhone(widget.phoneNumber);
+    if (!mounted) return;
+
+    final displayName = (existingUser != null &&
+            existingUser.name.trim().isNotEmpty &&
+            existingUser.name != 'Kisan User')
+        ? existingUser.name
+        : 'किसान मित्र';
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          'भूमि में आपका स्वागत है, $displayName!',
+          style: const TextStyle(fontFamily: 'Mukta', fontWeight: FontWeight.w600),
+        ),
+        backgroundColor: const Color(0xFF1E4D2B),
+        duration: const Duration(seconds: 2),
+      ),
+    );
+
+    Navigator.of(context).pushAndRemoveUntil(
+      PageRouteBuilder(
+        pageBuilder: (context, animation, secondaryAnimation) => const MainNavigation(),
+        transitionsBuilder: (context, animation, secondaryAnimation, child) {
+          return FadeTransition(opacity: animation, child: child);
+        },
+        transitionDuration: const Duration(milliseconds: 350),
+      ),
+      (route) => false,
+    );
   }
 
   String _formatPhoneMasked(String raw) {
@@ -133,24 +213,19 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final activeIndex = _otp.length < 4 ? _otp.length : 3;
+    final activeIndex = _otp.length < _otpLength ? _otp.length : _otpLength - 1;
 
     return Scaffold(
       backgroundColor: const Color(0xFFF6F2E9),
       body: SafeArea(
         top: true,
         bottom: true,
-        child: SizedBox.expand(
-          child: FittedBox(
-            fit: BoxFit.contain,
-            alignment: Alignment.center,
-            child: SizedBox(
-              width: 390,
-              height: 844,
-              child: Container(
-                color: const Color(0xFFF6F2E9),
-                child: Column(
-                  children: [
+        child: Align(
+          alignment: Alignment.topCenter,
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 520),
+            child: Column(
+              children: [
                     // Top Bar with Back Button
                     Padding(
                       padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
@@ -180,8 +255,9 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
 
                     // Main Body Content
                     Expanded(
-                      child: Padding(
-                        padding: const EdgeInsets.fromLTRB(24, 12, 24, 0),
+                      child: SingleChildScrollView(
+                        physics: const BouncingScrollPhysics(),
+                        padding: const EdgeInsets.fromLTRB(24, 12, 24, 24),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
@@ -223,7 +299,7 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
                                   color: Color(0xFF55655A),
                                 ),
                                 children: [
-                                  const TextSpan(text: 'We sent a 4-digit code to '),
+                                  TextSpan(text: 'We sent a $_otpLength-digit code to '),
                                   TextSpan(
                                     text: _formatPhoneMasked(widget.phoneNumber),
                                     style: const TextStyle(
@@ -253,20 +329,22 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
 
                             const SizedBox(height: 24),
 
-                            // 3. 4-digit OTP Boxes
+                            // 3. OTP Boxes
                             Row(
                               mainAxisAlignment: MainAxisAlignment.center,
-                              children: List.generate(4, (index) {
+                              children: List.generate(_otpLength, (index) {
                                 final digit = index < _otp.length ? _otp[index] : '';
                                 final isCurrent = index == activeIndex;
+                                final boxWidth = _otpLength == 6 ? 48.0 : 64.0;
+                                final boxHeight = _otpLength == 6 ? 62.0 : 72.0;
 
                                 return Container(
-                                  width: 64,
-                                  height: 72,
-                                  margin: const EdgeInsets.symmetric(horizontal: 5),
+                                  width: boxWidth,
+                                  height: boxHeight,
+                                  margin: EdgeInsets.symmetric(horizontal: _otpLength == 6 ? 3.5 : 5.0),
                                   decoration: BoxDecoration(
                                     color: Colors.white,
-                                    borderRadius: BorderRadius.circular(20),
+                                    borderRadius: BorderRadius.circular(16),
                                     border: Border.all(
                                       color: isCurrent
                                           ? const Color(0xFF1E4D2B)
@@ -277,11 +355,11 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
                                   alignment: Alignment.center,
                                   child: Text(
                                     digit,
-                                    style: const TextStyle(
+                                    style: TextStyle(
                                       fontFamily: 'Mukta',
-                                      fontSize: 32,
+                                      fontSize: _otpLength == 6 ? 26 : 32,
                                       fontWeight: FontWeight.w800,
-                                      color: Color(0xFF1B2A21),
+                                      color: const Color(0xFF1B2A21),
                                     ),
                                   ),
                                 );
@@ -314,7 +392,7 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
                                       ),
                                     )
                                   : GestureDetector(
-                                      onTap: _startTimer,
+                                      onTap: _resendCode,
                                       child: const Text(
                                         'Resend code now',
                                         style: TextStyle(
@@ -331,7 +409,7 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
 
                             // 5. Verify Button
                             GestureDetector(
-                              onTap: _onVerify,
+                              onTap: _isVerifying ? null : _onVerify,
                               child: Container(
                                 width: double.infinity,
                                 height: 56,
@@ -346,30 +424,41 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
                                     ),
                                   ],
                                 ),
-                                child: Row(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: const [
-                                    Text(
-                                      'Verify',
-                                      style: TextStyle(
-                                        fontFamily: 'Mukta',
-                                        fontSize: 17,
-                                        fontWeight: FontWeight.w800,
-                                        color: Colors.white,
+                                child: _isVerifying
+                                    ? const Center(
+                                        child: SizedBox(
+                                          width: 24,
+                                          height: 24,
+                                          child: CircularProgressIndicator(
+                                            strokeWidth: 2.5,
+                                            valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                                          ),
+                                        ),
+                                      )
+                                    : Row(
+                                        mainAxisAlignment: MainAxisAlignment.center,
+                                        children: const [
+                                          Text(
+                                            'Verify',
+                                            style: TextStyle(
+                                              fontFamily: 'Mukta',
+                                              fontSize: 17,
+                                              fontWeight: FontWeight.w800,
+                                              color: Colors.white,
+                                            ),
+                                          ),
+                                          SizedBox(width: 8),
+                                          Icon(
+                                            Icons.arrow_forward_rounded,
+                                            color: Colors.white,
+                                            size: 20,
+                                          ),
+                                        ],
                                       ),
-                                    ),
-                                    SizedBox(width: 8),
-                                    Icon(
-                                      Icons.arrow_forward_rounded,
-                                      color: Colors.white,
-                                      size: 20,
-                                    ),
-                                  ],
-                                ),
                               ),
                             ),
 
-                            const Spacer(),
+                            const SizedBox(height: 24),
 
                             // 6. On-screen Custom Numeric Keypad (3x4 Grid)
                             Padding(
@@ -445,9 +534,7 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
               ),
             ),
           ),
-        ),
-      ),
-    );
+        );
   }
 
   Widget _buildKey(String label) {

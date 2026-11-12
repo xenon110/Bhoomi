@@ -1,45 +1,27 @@
 import 'package:flutter/material.dart';
 import '../../l10n/app_strings.dart';
+import '../../services/mandi_service.dart';
 import '../../theme/app_theme.dart';
 
 /// Smart Mandi Transport & Profit Arbitrage Calculator
 /// Solves the real dilemma of Indian farmers: factoring in diesel transport fare
 /// and mandi taxes to find which mandi yields the absolute highest TAKE-HOME cash.
 class MandiArbitrageScreen extends StatefulWidget {
-  const MandiArbitrageScreen({super.key});
+  final String? initialCrop;
+  const MandiArbitrageScreen({super.key, this.initialCrop});
 
   @override
   State<MandiArbitrageScreen> createState() => _MandiArbitrageScreenState();
 }
 
 class _MandiArbitrageScreenState extends State<MandiArbitrageScreen> {
+  final MandiService _mandiService = MandiService();
   String _selectedCrop = 'Mustard';
   double _quantityQuintals = 15.0;
   String _selectedVehicle = 'Tractor Trolley'; // 'Tractor Trolley', 'Pickup 407', 'Tempo'
+  List<MandiPrice> _livePrices = [];
+  bool _isLoadingPrices = false;
   bool get isHindi => AppLanguage().isHindi;
-
-  final Map<String, Map<String, dynamic>> _cropData = {
-    'Mustard': {
-      'daltonganj': 6200.0,
-      'garhwa': 6280.0,
-      'ranchi': 6450.0,
-    },
-    'Wheat': {
-      'daltonganj': 2350.0,
-      'garhwa': 2380.0,
-      'ranchi': 2490.0,
-    },
-    'Ashwagandha': {
-      'daltonganj': 28500.0,
-      'garhwa': 29200.0,
-      'ranchi': 31000.0,
-    },
-    'Potato': {
-      'daltonganj': 1400.0,
-      'garhwa': 1450.0,
-      'ranchi': 1580.0,
-    },
-  };
 
   final Map<String, double> _vehicleRatePerKm = {
     'Tractor Trolley': 18.0,
@@ -47,11 +29,61 @@ class _MandiArbitrageScreenState extends State<MandiArbitrageScreen> {
     'Tempo': 9.0,
   };
 
-  final List<Map<String, dynamic>> _mandis = [
-    {'name': 'Daltonganj APMC', 'hi': 'डाल्टनगंज मुख्य मंडी', 'distanceKm': 12.0, 'key': 'daltonganj'},
-    {'name': 'Garhwa APMC', 'hi': 'गढ़वा कृषि मंडी', 'distanceKm': 38.0, 'key': 'garhwa'},
-    {'name': 'Ranchi APMC', 'hi': 'राँची थोक मंडी', 'distanceKm': 165.0, 'key': 'ranchi'},
-  ];
+  @override
+  void initState() {
+    super.initState();
+    if (widget.initialCrop != null && widget.initialCrop!.isNotEmpty) {
+      _selectedCrop = widget.initialCrop!;
+    }
+    _loadPrices();
+  }
+
+  Future<void> _loadPrices() async {
+    setState(() => _isLoadingPrices = true);
+    final p = await _mandiService.getPricesForCrop(_selectedCrop);
+    if (mounted) {
+      setState(() {
+        _livePrices = p;
+        _isLoadingPrices = false;
+      });
+    }
+  }
+
+  void _onCropSelected(String crop) {
+    setState(() => _selectedCrop = crop);
+    _loadPrices();
+  }
+
+  String _formatCropName(String crop, bool isHindi) {
+    switch (crop.toLowerCase()) {
+      case 'mustard':
+        return isHindi ? 'सरसों' : 'Mustard';
+      case 'wheat':
+        return isHindi ? 'गेहूं' : 'Wheat';
+      case 'paddy':
+        return isHindi ? 'धान' : 'Paddy';
+      case 'potato':
+        return isHindi ? 'आलू' : 'Potato';
+      case 'tomato':
+        return isHindi ? 'टमाटर' : 'Tomato';
+      case 'maize':
+        return isHindi ? 'मक्का' : 'Maize';
+      case 'gram':
+        return isHindi ? 'चना' : 'Gram';
+      case 'soybean':
+        return isHindi ? 'सोयाबीन' : 'Soybean';
+      case 'onion':
+        return isHindi ? 'प्याज' : 'Onion';
+      case 'garlic':
+        return isHindi ? 'लहसुन' : 'Garlic';
+      case 'ashwagandha':
+        return isHindi ? 'अश्वगंधा' : 'Ashwagandha';
+      case 'tulsi':
+        return isHindi ? 'तुलसी' : 'Tulsi';
+      default:
+        return crop;
+    }
+  }
 
   void _showSetAlertModal() {
     final isHindi = AppLanguage().isHindi;
@@ -147,26 +179,27 @@ class _MandiArbitrageScreenState extends State<MandiArbitrageScreen> {
   @override
   Widget build(BuildContext context) {
     final isHindi = AppLanguage().isHindi;
-    final cropRates = _cropData[_selectedCrop]!;
-    final ratePerKm = _vehicleRatePerKm[_selectedVehicle]!;
+    final ratePerKm = _vehicleRatePerKm[_selectedVehicle] ?? 18.0;
+    final availableCrops = _mandiService.getAvailableCrops();
 
-    // Compute net profit for each mandi
-    final List<Map<String, dynamic>> calculated = _mandis.map((m) {
-      final key = m['key'] as String;
-      final rate = cropRates[key] as double;
-      final distance = m['distanceKm'] as double;
-
+    // Compute net profit for each mandi dynamically using live prices
+    final List<Map<String, dynamic>> calculated = _livePrices.map((p) {
+      final distance = double.tryParse(p.distance.replaceAll(RegExp(r'[^0-9.]'), '')) ?? 25.0;
+      final rate = p.modalPrice.toDouble();
       final grossEarnings = rate * _quantityQuintals;
-      // Round trip fuel / transport calculation
       final transportCost = distance * 2 * ratePerKm;
       final mandiTax = grossEarnings * 0.01; // 1% APMC cess
       final netTakeHome = grossEarnings - transportCost - mandiTax;
 
       return {
-        'name': m['name'],
-        'hi': m['hi'],
+        'name': p.mandiName,
+        'hi': p.mandiName,
+        'district': p.district,
         'distanceKm': distance,
         'rate': rate,
+        'arrival': p.arrival,
+        'priceChange': p.priceChange,
+        'isUp': p.isUp,
         'gross': grossEarnings,
         'transport': transportCost,
         'net': netTakeHome,
@@ -174,8 +207,10 @@ class _MandiArbitrageScreenState extends State<MandiArbitrageScreen> {
     }).toList();
 
     // Find best net mandi
-    calculated.sort((a, b) => (b['net'] as double).compareTo(a['net'] as double));
-    final bestMandi = calculated.first;
+    if (calculated.isNotEmpty) {
+      calculated.sort((a, b) => (b['net'] as double).compareTo(a['net'] as double));
+    }
+    final bestMandi = calculated.isNotEmpty ? calculated.first : null;
 
     return Scaffold(
       backgroundColor: AppColors.creamBg,
@@ -230,38 +265,42 @@ class _MandiArbitrageScreenState extends State<MandiArbitrageScreen> {
                   children: [
                     Text(
                       isHindi ? 'फ़सल व मात्रा चुनें:' : 'Select Crop & Quantity:',
-                      style: TextStyle(fontFamily: 'Mukta', fontSize: 13, fontWeight: FontWeight.w500, color: AppColors.textMuted),
+                      style: const TextStyle(fontFamily: 'Mukta', fontSize: 13, fontWeight: FontWeight.w500, color: AppColors.textMuted),
                     ),
                     const SizedBox(height: 8),
 
-                    // Crop buttons
-                    Row(
-                      children: _cropData.keys.map((c) {
-                        final isSel = _selectedCrop == c;
-                        return Padding(
-                          padding: const EdgeInsets.only(right: 8),
-                          child: GestureDetector(
-                            onTap: () => setState(() => _selectedCrop = c),
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                              decoration: BoxDecoration(
-                                color: isSel ? AppColors.primaryGreen : AppColors.creamBg,
-                                borderRadius: BorderRadius.circular(14),
-                                border: Border.all(color: isSel ? AppColors.primaryGreen : const Color(0xFFDDD6C4)),
-                              ),
-                              child: Text(
-                                c,
-                                style: TextStyle(
-                                  fontFamily: 'Mukta',
-                                  fontSize: 12.5,
-                                  fontWeight: isSel ? FontWeight.w500 : FontWeight.w400,
-                                  color: isSel ? Colors.white : AppColors.textDark,
+                    // Crop buttons horizontal scroll
+                    SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      physics: const BouncingScrollPhysics(),
+                      child: Row(
+                        children: availableCrops.map((c) {
+                          final isSel = _selectedCrop.toLowerCase() == c.toLowerCase();
+                          return Padding(
+                            padding: const EdgeInsets.only(right: 8),
+                            child: GestureDetector(
+                              onTap: () => _onCropSelected(c),
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                                decoration: BoxDecoration(
+                                  color: isSel ? AppColors.primaryGreen : AppColors.creamBg,
+                                  borderRadius: BorderRadius.circular(14),
+                                  border: Border.all(color: isSel ? AppColors.primaryGreen : const Color(0xFFDDD6C4)),
+                                ),
+                                child: Text(
+                                  _formatCropName(c, isHindi),
+                                  style: TextStyle(
+                                    fontFamily: 'Mukta',
+                                    fontSize: 13,
+                                    fontWeight: isSel ? FontWeight.w600 : FontWeight.w400,
+                                    color: isSel ? Colors.white : AppColors.textDark,
+                                  ),
                                 ),
                               ),
                             ),
-                          ),
-                        );
-                      }).toList(),
+                          );
+                        }).toList(),
+                      ),
                     ),
 
                     const SizedBox(height: 14),
@@ -272,7 +311,7 @@ class _MandiArbitrageScreenState extends State<MandiArbitrageScreen> {
                       children: [
                         Text(
                           isHindi ? 'बिक्री मात्रा:' : 'Harvest Quantity:',
-                          style: TextStyle(fontFamily: 'Mukta', fontSize: 13, fontWeight: FontWeight.w500, color: AppColors.textDark),
+                          style: const TextStyle(fontFamily: 'Mukta', fontSize: 13, fontWeight: FontWeight.w500, color: AppColors.textDark),
                         ),
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
@@ -305,7 +344,7 @@ class _MandiArbitrageScreenState extends State<MandiArbitrageScreen> {
                     // Transport Vehicle
                     Text(
                       isHindi ? 'परिवहन वाहन:' : 'Transport Vehicle Mode:',
-                      style: TextStyle(fontFamily: 'Mukta', fontSize: 13, fontWeight: FontWeight.w500, color: AppColors.textMuted),
+                      style: const TextStyle(fontFamily: 'Mukta', fontSize: 13, fontWeight: FontWeight.w500, color: AppColors.textMuted),
                     ),
                     const SizedBox(height: 6),
                     Row(
@@ -328,70 +367,80 @@ class _MandiArbitrageScreenState extends State<MandiArbitrageScreen> {
 
               const SizedBox(height: 16),
 
-              // 2. Winner Recommendation Insight Card
-              Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFF2B134).withOpacity(0.18),
-                  borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: AppColors.cardGold, width: 1.5),
-                ),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Icon(Icons.stars_rounded, color: Color(0xFF8A5600), size: 28),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            isHindi ? 'सर्वाधिक बचत सिफारिश' : 'Best Take-Home Recommendation',
-                            style: TextStyle(
-                              fontFamily: 'Mukta',
-                              fontSize: 14.5,
-                              fontWeight: FontWeight.w600,
-                              color: Color(0xFF8A5600),
+              if (_isLoadingPrices)
+                const Center(
+                  child: Padding(
+                    padding: EdgeInsets.symmetric(vertical: 36),
+                    child: CircularProgressIndicator(color: AppColors.primaryGreen, strokeWidth: 2.5),
+                  ),
+                )
+              else if (bestMandi != null) ...[
+                // 2. Winner Recommendation Insight Card
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF2B134).withOpacity(0.18),
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: AppColors.cardGold, width: 1.5),
+                  ),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Icon(Icons.stars_rounded, color: Color(0xFF8A5600), size: 28),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              isHindi ? 'सर्वाधिक बचत सिफारिश' : 'Best Take-Home Recommendation',
+                              style: const TextStyle(
+                                fontFamily: 'Mukta',
+                                fontSize: 14.5,
+                                fontWeight: FontWeight.w600,
+                                color: Color(0xFF8A5600),
+                              ),
                             ),
-                          ),
-                          const SizedBox(height: 2),
-                          Text(
-                            isHindi ? '${bestMandi['hi']} में बेचने पर आपको डीजल व भाड़ा काटकर शुद्ध ₹${(bestMandi['net'] as double).toStringAsFixed(0)} घर मिलेगा।' : 'Selling at ${bestMandi['name']} gives the highest net return of ₹${(bestMandi['net'] as double).toStringAsFixed(0)} after fuel and transport.',
-                            style: const TextStyle(
-                              fontFamily: 'Mukta',
-                              fontSize: 13,
-                              fontWeight: FontWeight.w400,
-                              color: Color(0xFF5C3D00),
+                            const SizedBox(height: 2),
+                            Text(
+                              isHindi
+                                  ? '${bestMandi['name']} में बेचने पर आपको डीजल व भाड़ा काटकर शुद्ध ₹${(bestMandi['net'] as double).toStringAsFixed(0)} घर मिलेगा।'
+                                  : 'Selling at ${bestMandi['name']} gives the highest net return of ₹${(bestMandi['net'] as double).toStringAsFixed(0)} after fuel and transport.',
+                              style: const TextStyle(
+                                fontFamily: 'Mukta',
+                                fontSize: 13,
+                                fontWeight: FontWeight.w400,
+                                color: Color(0xFF5C3D00),
+                              ),
                             ),
-                          ),
-                        ],
+                          ],
+                        ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
-              ),
 
-              const SizedBox(height: 16),
+                const SizedBox(height: 16),
 
-              // 3. Comparison Cards
-              Text(
-                isHindi ? 'मंडीवार शुद्ध मुनाफा तुलना' : 'Mandi-wise Net Return Comparison',
-                style: TextStyle(
-                  fontFamily: 'Mukta',
-                  fontSize: 15,
-                  fontWeight: FontWeight.w600,
-                  color: AppColors.textDark,
+                // 3. Comparison Cards
+                Text(
+                  isHindi ? 'मंडीवार शुद्ध मुनाफा तुलना' : 'Mandi-wise Net Return Comparison',
+                  style: const TextStyle(
+                    fontFamily: 'Mukta',
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.textDark,
+                  ),
                 ),
-              ),
-              const SizedBox(height: 8),
+                const SizedBox(height: 8),
 
-              ...calculated.map((item) {
-                final isWinner = item == bestMandi;
-                final net = item['net'] as double;
-                final gross = item['gross'] as double;
-                final transport = item['transport'] as double;
-                final rate = item['rate'] as double;
-                final dist = item['distanceKm'] as double;
+                ...calculated.map((item) {
+                  final isWinner = item == bestMandi;
+                  final net = item['net'] as double;
+                  final gross = item['gross'] as double;
+                  final transport = item['transport'] as double;
+                  final rate = item['rate'] as double;
+                  final dist = item['distanceKm'] as double;
 
                 return Container(
                   margin: const EdgeInsets.only(bottom: 10),
@@ -471,6 +520,7 @@ class _MandiArbitrageScreenState extends State<MandiArbitrageScreen> {
                   ),
                 );
               }),
+            ],
 
               const SizedBox(height: 10),
 

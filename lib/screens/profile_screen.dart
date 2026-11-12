@@ -18,6 +18,7 @@ import '../widgets/safe_local_image.dart';
 import '../widgets/turso_database_modal.dart';
 import '../services/turso/turso_service.dart';
 import 'auth/language_selection_screen.dart';
+import 'auth/login_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
   final Function(int)? onNavigateTab;
@@ -1426,6 +1427,56 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
+  void _confirmLogout() {
+    final isHindi = AppLanguage().isHindi;
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
+        title: Text(
+          isHindi ? 'खाता बदलें / लॉग आउट' : 'Switch Account / Log Out',
+          style: const TextStyle(fontFamily: 'Mukta', fontWeight: FontWeight.w600),
+        ),
+        content: Text(
+          isHindi
+              ? 'क्या आप वर्तमान किसान खाते से लॉग आउट करना चाहते हैं?'
+              : 'Are you sure you want to log out from this farmer account?',
+          style: const TextStyle(fontFamily: 'Mukta', fontSize: 14),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: Text(
+              isHindi ? 'रद्द करें' : 'Cancel',
+              style: const TextStyle(fontFamily: 'Mukta', color: AppColors.textMuted),
+            ),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFFB03A2E),
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            ),
+            onPressed: () async {
+              Navigator.pop(ctx);
+              await _storage.clearUserData();
+              if (mounted) {
+                Navigator.of(context).pushAndRemoveUntil(
+                  MaterialPageRoute(builder: (_) => const LoginScreen()),
+                  (route) => false,
+                );
+              }
+            },
+            child: Text(
+              isHindi ? 'लॉग आउट' : 'Log Out',
+              style: const TextStyle(fontFamily: 'Mukta', fontWeight: FontWeight.w500),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final lang = AppLanguage();
@@ -1808,6 +1859,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       iconColor: AppColors.textDark,
                       title: isHindi ? 'सुझाव व प्रतिक्रिया' : 'Send Feedback',
                       onTap: _showFeedbackDialog,
+                      showDivider: true,
+                    ),
+                    // Switch Farmer Account / Log Out
+                    _buildMenuItem(
+                      icon: Icons.logout_rounded,
+                      iconBg: const Color(0xFFFDE8E8),
+                      iconColor: const Color(0xFFB03A2E),
+                      title: isHindi ? 'खाता बदलें / लॉग आउट' : 'Switch Account / Log Out',
+                      onTap: _confirmLogout,
                       showDivider: false,
                     ),
                   ],

@@ -149,6 +149,55 @@ class _AdviceScreenState extends State<AdviceScreen> {
             ),
             const SizedBox(height: 14),
             Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+              decoration: BoxDecoration(
+                color: (w.windSpeed < 14.0 && w.rainChance < 25)
+                    ? const Color(0xFFEFF8F1)
+                    : const Color(0xFFFEF2F2),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(
+                  color: (w.windSpeed < 14.0 && w.rainChance < 25)
+                      ? const Color(0xFFA6DBB2)
+                      : const Color(0xFFFCA5A5),
+                  width: 1.2,
+                ),
+              ),
+              child: Row(
+                children: [
+                  Icon(
+                    (w.windSpeed < 14.0 && w.rainChance < 25)
+                        ? Icons.check_circle_rounded
+                        : Icons.warning_amber_rounded,
+                    color: (w.windSpeed < 14.0 && w.rainChance < 25)
+                        ? const Color(0xFF2E7D32)
+                        : const Color(0xFFDC2626),
+                    size: 20,
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      (w.windSpeed < 14.0 && w.rainChance < 25)
+                          ? (isHindi
+                              ? 'स्प्रे के लिए उत्तम समय: हवा शांत है और बारिश का जोखिम नहीं है।'
+                              : 'Safe for Spray: Calm wind and low rain risk.')
+                          : (isHindi
+                              ? 'स्प्रे स्थगित करें: तेज हवा या बारिश से दवा धुलने का खतरा है।'
+                              : 'Hold Spray: Strong wind or rain risk.'),
+                      style: TextStyle(
+                        fontFamily: 'Mukta',
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w600,
+                        color: (w.windSpeed < 14.0 && w.rainChance < 25)
+                            ? const Color(0xFF1B5E20)
+                            : const Color(0xFF991B1B),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 10),
+            Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
                 color: AppColors.mintTint,
